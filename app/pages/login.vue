@@ -1,0 +1,530 @@
+<template>
+  <div class="login-page min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+    <!-- Background Effects -->
+    <div class="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950" />
+    <div class="cyber-grid absolute inset-0 opacity-10 dark:opacity-20" />
+    <div class="scan-line absolute inset-0 pointer-events-none" />
+
+    <!-- Floating particles -->
+    <div class="particles absolute inset-0 overflow-hidden pointer-events-none">
+      <div
+        v-for="i in 20"
+        :key="i"
+        class="particle"
+        :style="{
+          left: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 5}s`,
+          animationDuration: `${5 + Math.random() * 10}s`
+        }"
+      />
+    </div>
+
+    <!-- Login Card -->
+    <div class="login-card relative z-10 w-full max-w-md">
+      <!-- Logo -->
+      <div class="text-center mb-8">
+        <NuxtLink
+          to="/"
+          class="inline-flex items-center justify-center gap-3 group"
+        >
+          <div class="logo-glow relative">
+            <svg
+              width="56"
+              height="56"
+              viewBox="0 0 40 40"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="shrink-0"
+            >
+              <path
+                d="M20 2L4 8V18C4 28.5 10.84 38.26 20 40C29.16 38.26 36 28.5 36 18V8L20 2Z"
+                fill="var(--ui-primary)"
+                fill-opacity="0.15"
+                stroke="var(--ui-primary)"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M14 12V28M14 12L26 16L14 20"
+                stroke="var(--ui-primary)"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <div class="absolute inset-0 bg-primary-500/20 dark:bg-primary-500/30 blur-xl rounded-full scale-150" />
+          </div>
+          <span class="font-bold text-3xl tracking-tight text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+            NKCTF
+          </span>
+        </NuxtLink>
+        <p class="mt-3 text-gray-500 dark:text-gray-400 text-sm font-mono h-5">
+          <span class="typing-text">{{ displayedText }}</span><span class="cursor">|</span>
+        </p>
+      </div>
+
+      <!-- Form Card -->
+      <UCard
+        :ui="{
+          root: 'login-card-inner bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200 dark:border-gray-800 shadow-xl dark:shadow-2xl shadow-gray-200/50 dark:shadow-primary-900/20',
+          body: 'p-6 sm:p-8'
+        }"
+      >
+        <UForm
+          :state="formState"
+          :validate="validate"
+          class="space-y-5"
+          @submit="onSubmit"
+        >
+          <!-- Username/Email Field -->
+          <UFormField
+            label="用户名或邮箱"
+            name="account"
+            required
+          >
+            <UInput
+              v-model="formState.account"
+              placeholder="输入用户名或邮箱"
+              icon="i-lucide-user"
+              size="lg"
+              autocomplete="username"
+              class="form-input"
+            />
+          </UFormField>
+
+          <!-- Password Field -->
+          <UFormField
+            label="密码"
+            name="password"
+            required
+          >
+            <UInput
+              v-model="formState.password"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="输入密码"
+              icon="i-lucide-lock"
+              size="lg"
+              autocomplete="current-password"
+              class="form-input"
+            >
+              <template #trailing>
+                <UButton
+                  :icon="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+                  @click="showPassword = !showPassword"
+                />
+              </template>
+            </UInput>
+          </UFormField>
+
+          <!-- Remember Me & Forgot Password -->
+          <div class="flex items-center justify-between">
+            <UCheckbox
+              v-model="formState.rememberMe"
+              label="记住我"
+            />
+            <NuxtLink
+              to="/forgot-password"
+              class="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+            >
+              忘记密码？
+            </NuxtLink>
+          </div>
+
+          <!-- Submit Button -->
+          <UButton
+            type="submit"
+            block
+            size="lg"
+            :loading="isLoading"
+            class="cyber-button mt-6"
+          >
+            <template #leading>
+              <UIcon
+                name="i-lucide-log-in"
+                class="w-5 h-5"
+              />
+            </template>
+            登录
+          </UButton>
+        </UForm>
+
+        <!-- Divider -->
+        <div class="relative my-6">
+          <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-gray-200 dark:border-gray-700" />
+          </div>
+          <div class="relative flex justify-center text-sm">
+            <span class="px-4 bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-500 font-mono">OR</span>
+          </div>
+        </div>
+
+        <!-- Social Login -->
+        <div class="space-y-3">
+          <UButton
+            block
+            color="neutral"
+            variant="outline"
+            size="lg"
+          >
+            <template #leading>
+              <UIcon
+                name="i-simple-icons-github"
+                class="w-5 h-5"
+              />
+            </template>
+            使用 GitHub 登录
+          </UButton>
+        </div>
+
+        <!-- Register Link -->
+        <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+          还没有账户？
+          <NuxtLink
+            to="/register"
+            class="font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+          >
+            立即注册
+          </NuxtLink>
+        </p>
+      </UCard>
+
+      <!-- Terminal-style decoration -->
+      <div class="mt-6 text-center">
+        <p class="text-xs text-gray-400 dark:text-gray-600 font-mono">
+          <span class="text-primary-600 dark:text-primary-500">root@nkctf</span>:<span class="text-blue-500">~</span>$ ./authenticate.sh
+        </p>
+      </div>
+    </div>
+
+    <!-- Theme Toggle -->
+    <div class="fixed top-4 right-4 z-20">
+      <UColorModeButton />
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import type { FormSubmitEvent } from '#ui/types'
+
+interface FormState {
+  account: string
+  password: string
+  rememberMe: boolean
+}
+
+useSeoMeta({
+  title: '登录 - NKCTF',
+  description: '登录 NKCTF 网络安全竞赛训练平台，继续你的 CTF 之旅'
+})
+
+const formState = reactive<FormState>({
+  account: '',
+  password: '',
+  rememberMe: false
+})
+
+const showPassword = ref(false)
+const isLoading = ref(false)
+
+// Typewriter effect with multiple sentences
+const sentences = [
+  '// Welcome back, hacker.',
+  'ssh root@nkctf.com',
+  'Initializing secure connection...',
+  'Access granted.',
+  'echo "Let\'s hack the planet!"'
+]
+const displayedText = ref('')
+const typingSpeed = 50
+const deletingSpeed = 30
+const pauseBeforeDelete = 2000
+const pauseBeforeType = 500
+
+onMounted(() => {
+  let sentenceIndex = 0
+  let charIndex = 0
+  let isDeleting = false
+
+  const tick = () => {
+    const currentSentence = sentences[sentenceIndex]!
+
+    if (isDeleting) {
+      displayedText.value = currentSentence.substring(0, charIndex - 1)
+      charIndex--
+
+      if (charIndex === 0) {
+        isDeleting = false
+        sentenceIndex = (sentenceIndex + 1) % sentences.length
+        setTimeout(tick, pauseBeforeType)
+      } else {
+        setTimeout(tick, deletingSpeed)
+      }
+    } else {
+      displayedText.value = currentSentence.substring(0, charIndex + 1)
+      charIndex++
+
+      if (charIndex === currentSentence.length) {
+        isDeleting = true
+        setTimeout(tick, pauseBeforeDelete)
+      } else {
+        setTimeout(tick, typingSpeed)
+      }
+    }
+  }
+
+  setTimeout(tick, pauseBeforeType)
+})
+
+const validate = (state: FormState) => {
+  const errors = []
+
+  if (!state.account) {
+    errors.push({ path: 'account', message: '请输入用户名或邮箱' })
+  }
+
+  if (!state.password) {
+    errors.push({ path: 'password', message: '请输入密码' })
+  }
+
+  return errors
+}
+
+const onSubmit = async (event: FormSubmitEvent<FormState>) => {
+  isLoading.value = true
+
+  try {
+    // TODO: 实现登录 API 调用
+    console.log('Login data:', event.data)
+
+    // 模拟 API 调用
+    await new Promise(resolve => setTimeout(resolve, 1500))
+
+    // 登录成功后跳转
+    navigateTo('/')
+  } catch (error) {
+    console.error('Login failed:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+</script>
+
+<style scoped>
+/* Cyber Grid Background */
+.cyber-grid {
+  background-image:
+    linear-gradient(rgba(0, 180, 100, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 180, 100, 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+  animation: grid-move 20s linear infinite;
+}
+
+:root.dark .cyber-grid {
+  background-image:
+    linear-gradient(rgba(0, 220, 130, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 220, 130, 0.03) 1px, transparent 1px);
+}
+
+@keyframes grid-move {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(50px, 50px);
+  }
+}
+
+/* Scan Line Effect */
+.scan-line {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 180, 100, 0.02) 50%,
+    transparent 100%
+  );
+  background-size: 100% 8px;
+  animation: scan 8s linear infinite;
+}
+
+:root.dark .scan-line {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 220, 130, 0.03) 50%,
+    transparent 100%
+  );
+  background-size: 100% 8px;
+}
+
+@keyframes scan {
+  0% {
+    background-position: 0 -100vh;
+  }
+  100% {
+    background-position: 0 100vh;
+  }
+}
+
+/* Floating Particles */
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--ui-primary);
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: float-up linear infinite;
+}
+
+:root.dark .particle {
+  opacity: 0.6;
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.4;
+  }
+  90% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-100vh) scale(1);
+    opacity: 0;
+  }
+}
+
+:root.dark .particle {
+  animation-name: float-up-dark;
+}
+
+@keyframes float-up-dark {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-100vh) scale(1);
+    opacity: 0;
+  }
+}
+
+/* Logo Glow Effect */
+.logo-glow {
+  position: relative;
+}
+
+.logo-glow::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  background: radial-gradient(circle, rgba(0, 180, 100, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+:root.dark .logo-glow::before {
+  background: radial-gradient(circle, rgba(0, 220, 130, 0.2) 0%, transparent 70%);
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* Typing Text Animation */
+.typing-text {
+  display: inline;
+}
+
+.cursor {
+  display: inline-block;
+  color: var(--ui-primary);
+  font-weight: 400;
+  animation: blink 1s step-end infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Card hover effect */
+.login-card-inner {
+  transition: all 0.3s ease;
+}
+
+.login-card:hover .login-card-inner {
+  box-shadow:
+    0 0 0 1px rgba(0, 180, 100, 0.1),
+    0 25px 50px -12px rgba(0, 0, 0, 0.15),
+    0 0 60px -15px rgba(0, 180, 100, 0.1);
+}
+
+:root.dark .login-card:hover .login-card-inner {
+  box-shadow:
+    0 0 0 1px rgba(0, 220, 130, 0.1),
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 60px -15px rgba(0, 220, 130, 0.15);
+}
+
+/* Cyber Button Effect */
+.cyber-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.cyber-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.cyber-button:hover::before {
+  left: 100%;
+}
+
+/* Form Input Styling */
+.form-input {
+  width: 100%;
+}
+
+.form-input :deep(input) {
+  width: 100%;
+}
+</style>
