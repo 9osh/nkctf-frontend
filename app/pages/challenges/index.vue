@@ -72,10 +72,67 @@
         />
       </div>
 
-      <!-- Challenge Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <!-- Loading State -->
+      <div
+        v-if="isLoadingList"
+        class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+      >
         <div
-          v-for="challenge in paginatedChallenges"
+          v-for="n in 6"
+          :key="n"
+          class="h-48"
+        >
+          <UCard
+            :ui="{
+              root: 'h-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800',
+              body: 'p-5'
+            }"
+          >
+            <div class="flex items-start justify-between mb-3">
+              <USkeleton class="h-10 w-10 rounded-lg" />
+              <USkeleton class="h-5 w-16" />
+            </div>
+            <USkeleton class="h-5 w-3/4 mb-2" />
+            <USkeleton class="h-4 w-full mb-1" />
+            <USkeleton class="h-4 w-2/3 mb-4" />
+            <div class="flex justify-between">
+              <USkeleton class="h-4 w-24" />
+              <USkeleton class="h-4 w-20" />
+            </div>
+          </UCard>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div
+        v-else-if="listError"
+        class="flex flex-col items-center justify-center py-16"
+      >
+        <UIcon
+          name="i-lucide-alert-circle"
+          class="w-16 h-16 text-red-400 dark:text-red-500 mb-4"
+        />
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+          加载失败
+        </h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          {{ listError }}
+        </p>
+        <UButton
+          icon="i-lucide-refresh-cw"
+          @click="fetchChallenges"
+        >
+          重试
+        </UButton>
+      </div>
+
+      <!-- Challenge Grid -->
+      <div
+        v-else
+        class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+      >
+        <div
+          v-for="challenge in filteredChallenges"
           :key="challenge.id"
           class="challenge-card group"
         >
@@ -163,7 +220,7 @@
 
       <!-- Empty State -->
       <div
-        v-if="filteredChallenges.length === 0"
+        v-if="!isLoadingList && !listError && filteredChallenges.length === 0"
         class="flex flex-col items-center justify-center py-16"
       >
         <UIcon
@@ -180,16 +237,16 @@
 
       <!-- Pagination -->
       <div
-        v-if="filteredChallenges.length > 0"
+        v-if="!isLoadingList && !listError && totalItems > 0"
         class="flex items-center justify-between mt-8"
       >
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, filteredChallenges.length) }} / {{ filteredChallenges.length }} 题
+          显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, totalItems) }} / {{ totalItems }} 题
         </p>
         <UPagination
           v-model="currentPage"
-          :total="filteredChallenges.length"
-          :page-count="pageSize"
+          :total="totalItems"
+          :items-per-page="pageSize"
         />
       </div>
     </div>
@@ -197,16 +254,16 @@
     <!-- Challenge Modal -->
     <UModal
       v-model:open="isChallengeModalOpen"
-      class="max-w-2xl"
+      class="sm:max-w-2xl"
     >
       <template #content>
         <UCard
           v-if="selectedChallenge"
           :ui="{
-            root: 'bg-white dark:bg-gray-900',
-            header: 'border-b border-gray-200 dark:border-gray-800',
-            body: 'p-6',
-            footer: 'border-t border-gray-200 dark:border-gray-800'
+            root: 'bg-white dark:bg-gray-900 flex flex-col max-h-[90vh]',
+            header: 'border-b border-gray-200 dark:border-gray-800 flex-shrink-0',
+            body: 'p-6 overflow-y-auto flex-1',
+            footer: 'border-t border-gray-200 dark:border-gray-800 flex-shrink-0'
           }"
         >
           <template #header>
@@ -257,98 +314,181 @@
               {{ selectedChallenge.description }}
             </p>
 
-            <div class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
-              <span class="flex items-center gap-1">
-                <UIcon
-                  name="i-lucide-star"
-                  class="w-4 h-4"
-                />
-                {{ selectedChallenge.points }} 分
-              </span>
-              <span class="flex items-center gap-1">
-                <UIcon
-                  name="i-lucide-users"
-                  class="w-4 h-4"
-                />
-                {{ selectedChallenge.solves }} 人解决
-              </span>
-              <span class="flex items-center gap-1">
-                <UIcon
-                  name="i-lucide-user"
-                  class="w-4 h-4"
-                />
-                {{ selectedChallenge.author }}
-              </span>
-            </div>
-
-            <!-- Flag Submission -->
-            <div class="mt-6">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                提交 Flag
-              </label>
-              <div class="flex gap-2">
-                <UInput
-                  v-model="flagInput"
-                  placeholder="NKCTF{...}"
-                  icon="i-lucide-flag"
-                  class="flex-1"
-                />
-                <UButton
-                  :loading="isSubmitting"
-                  @click="submitFlag"
-                >
-                  提交
-                </UButton>
+            <!-- Loading state for details -->
+            <template v-if="isLoadingDetail">
+              <div class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+                <span class="flex items-center gap-1">
+                  <UIcon
+                    name="i-lucide-star"
+                    class="w-4 h-4"
+                  />
+                  {{ selectedChallenge.points }} 分
+                </span>
+                <span class="flex items-center gap-1">
+                  <UIcon
+                    name="i-lucide-users"
+                    class="w-4 h-4"
+                  />
+                  {{ selectedChallenge.solves }} 人解决
+                </span>
+                <span class="flex items-center gap-1">
+                  <UIcon
+                    name="i-lucide-loader-2"
+                    class="w-4 h-4 animate-spin"
+                  />
+                  加载中...
+                </span>
               </div>
-            </div>
+              <div class="mt-6 space-y-3">
+                <USkeleton class="h-4 w-20" />
+                <USkeleton class="h-10 w-full" />
+                <USkeleton class="h-10 w-24" />
+              </div>
+            </template>
 
-            <!-- Hints -->
-            <div
-              v-if="selectedChallenge.hints && selectedChallenge.hints.length > 0"
-              class="mt-4"
-            >
-              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                提示
-              </h4>
-              <div class="space-y-2">
+            <!-- Error state -->
+            <template v-else-if="detailError">
+              <div class="flex items-center gap-2 text-red-500 dark:text-red-400">
+                <UIcon
+                  name="i-lucide-alert-circle"
+                  class="w-5 h-5"
+                />
+                <span>{{ detailError }}</span>
+              </div>
+            </template>
+
+            <!-- Loaded state -->
+            <template v-else>
+              <div class="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
+                <span class="flex items-center gap-1">
+                  <UIcon
+                    name="i-lucide-star"
+                    class="w-4 h-4"
+                  />
+                  {{ selectedChallenge.points }} 分
+                </span>
+                <span class="flex items-center gap-1">
+                  <UIcon
+                    name="i-lucide-users"
+                    class="w-4 h-4"
+                  />
+                  {{ selectedChallenge.solves }} 人解决
+                </span>
+                <span class="flex items-center gap-1">
+                  <UIcon
+                    name="i-lucide-user"
+                    class="w-4 h-4"
+                  />
+                  {{ selectedChallenge.author }}
+                </span>
+              </div>
+
+              <!-- Challenge Content (Markdown) -->
+              <div
+                v-if="selectedChallenge.content"
+                class="mt-4 prose prose-sm dark:prose-invert max-w-none"
+              >
                 <div
-                  v-for="(hint, index) in selectedChallenge.hints"
-                  :key="index"
-                  class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                >
-                  <span class="text-sm text-gray-600 dark:text-gray-400">
-                    提示 {{ index + 1 }} (-{{ hint.cost }} 分)
-                  </span>
+                  class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  v-html="renderMarkdown(selectedChallenge.content)"
+                />
+              </div>
+
+              <!-- Attachments -->
+              <div
+                v-if="selectedChallenge.attachments && selectedChallenge.attachments.length > 0"
+                class="mt-4"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  附件
+                </h4>
+                <div class="flex flex-wrap gap-2">
                   <UButton
-                    size="xs"
+                    v-for="attachment in selectedChallenge.attachments"
+                    :key="attachment.name"
+                    size="sm"
                     variant="outline"
+                    icon="i-lucide-download"
+                    @click="downloadAttachment(attachment)"
                   >
-                    查看
+                    {{ attachment.name }}
                   </UButton>
                 </div>
               </div>
-            </div>
 
-            <!-- Attachments -->
-            <div
-              v-if="selectedChallenge.attachments && selectedChallenge.attachments.length > 0"
-              class="mt-4"
-            >
-              <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                附件
-              </h4>
-              <div class="flex flex-wrap gap-2">
-                <UButton
-                  v-for="attachment in selectedChallenge.attachments"
-                  :key="attachment.name"
-                  size="sm"
-                  variant="outline"
-                  icon="i-lucide-download"
-                >
-                  {{ attachment.name }}
-                </UButton>
+              <!-- Flag Submission -->
+              <div class="mt-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  提交 Flag
+                </label>
+                <div class="flex gap-2">
+                  <UInput
+                    v-model="flagInput"
+                    placeholder="NKCTF{...}"
+                    icon="i-lucide-flag"
+                    class="flex-1"
+                    :disabled="selectedChallenge.solved"
+                  />
+                  <UButton
+                    :loading="isSubmitting"
+                    :disabled="selectedChallenge.solved"
+                    @click="submitFlag"
+                  >
+                    {{ selectedChallenge.solved ? '已解决' : '提交' }}
+                  </UButton>
+                </div>
               </div>
-            </div>
+
+              <!-- Hints -->
+              <div
+                v-if="selectedChallenge.hints && selectedChallenge.hints.length > 0"
+                class="mt-4"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  提示
+                </h4>
+                <div class="space-y-2">
+                  <div
+                    v-for="(hint, index) in selectedChallenge.hints"
+                    :key="hint.id"
+                    class="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  >
+                    <div class="flex items-center justify-between">
+                      <span class="text-sm text-gray-600 dark:text-gray-400">
+                        提示 {{ index + 1 }}
+                        <span
+                          v-if="!hint.unlocked"
+                          class="text-xs text-gray-400 dark:text-gray-500"
+                        >
+                          (-{{ hint.cost }} 分)
+                        </span>
+                      </span>
+                      <UButton
+                        v-if="!hint.unlocked"
+                        size="xs"
+                        variant="outline"
+                        @click="unlockHint(hint)"
+                      >
+                        解锁
+                      </UButton>
+                      <UBadge
+                        v-else
+                        label="已解锁"
+                        color="success"
+                        variant="subtle"
+                        size="xs"
+                      />
+                    </div>
+                    <p
+                      v-if="hint.unlocked && hint.content"
+                      class="mt-2 text-sm text-gray-700 dark:text-gray-300"
+                    >
+                      {{ hint.content }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
         </UCard>
       </template>
@@ -357,9 +497,33 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * API response interface
+ */
+interface ApiResponse<T = unknown> {
+  code: number
+  message: string
+  data: T
+}
+
+/**
+ * Paginated response from API
+ */
+interface PaginatedResponse<T> {
+  records: T[]
+  total: number
+  page: number
+  size: number
+  pages: number
+  hasNext: boolean
+  hasPrevious: boolean
+}
+
 interface Hint {
+  id: number
   cost: number
   unlocked: boolean
+  content?: string
 }
 
 interface Attachment {
@@ -367,7 +531,10 @@ interface Attachment {
   url: string
 }
 
-interface Challenge {
+/**
+ * Challenge list item (basic info for card display)
+ */
+interface ChallengeListItem {
   id: number
   title: string
   description: string
@@ -377,9 +544,16 @@ interface Challenge {
   solves: number
   solved: boolean
   releaseDate: string
+}
+
+/**
+ * Challenge detail (full info for modal display)
+ */
+interface ChallengeDetail extends ChallengeListItem {
   author: string
   hints?: Hint[]
   attachments?: Attachment[]
+  content?: string
 }
 
 useSeoMeta({
@@ -394,275 +568,151 @@ const selectedDifficulty = ref<string | undefined>(undefined)
 const selectedStatus = ref<string | undefined>(undefined)
 const sortBy = ref('newest')
 
-// Pagination
+// Pagination (API returns 30 items per page)
 const currentPage = ref(1)
-const pageSize = 12
+const totalItems = ref(0)
+const totalPages = ref(0)
+const pageSize = 30
 
 // Modal
 const isChallengeModalOpen = ref(false)
-const selectedChallenge = ref<Challenge | null>(null)
+const selectedChallenge = ref<ChallengeDetail | null>(null)
+const isLoadingDetail = ref(false)
+const detailError = ref<string | null>(null)
 const flagInput = ref('')
 const isSubmitting = ref(false)
+
+const { storedUser, initUser } = useUser()
+const toast = useToast()
 
 // Filter options
 const categories = [
   { label: '所有分类', value: undefined },
-  { label: 'Web', value: 'Web' },
-  { label: 'Pwn', value: 'Pwn' },
-  { label: 'Crypto', value: 'Crypto' },
-  { label: 'Reverse', value: 'Reverse' },
-  { label: 'Misc', value: 'Misc' },
-  { label: 'Blockchain', value: 'Blockchain' }
+  { label: 'Web', value: 'web' },
+  { label: 'Pwn', value: 'pwn' },
+  { label: 'Crypto', value: 'crypto' },
+  { label: 'Reverse', value: 'reverse' },
+  { label: 'Misc', value: 'misc' },
+  { label: 'Blockchain', value: 'blockchain' }
 ]
 
 const difficulties = [
   { label: '所有难度', value: undefined },
-  { label: 'very easy', value: 'very easy' },
-  { label: 'easy', value: 'easy' },
-  { label: 'medium', value: 'medium' },
-  { label: 'hard', value: 'hard' },
-  { label: 'insane', value: 'insane' }
+  { label: 'Easy', value: 'EASY' },
+  { label: 'Medium', value: 'MEDIUM' },
+  { label: 'Hard', value: 'HARD' }
 ]
 
 const statuses = [
   { label: '所有状态', value: undefined },
-  { label: '已解决', value: 'solved' },
-  { label: '未解决', value: 'unsolved' }
+  { label: '已解决', value: 'true' },
+  { label: '未解决', value: 'false' }
 ]
 
 const sortOptions = [
   { label: '最新发布', value: 'newest' },
-  { label: '最多解决', value: 'most-solves' },
-  { label: '最少解决', value: 'least-solves' },
-  { label: '最高分值', value: 'highest-points' }
+  { label: '最多解决', value: 'most_solves' },
+  { label: '最少解决', value: 'least_solves' },
+  { label: '最高分值', value: 'highest_points' }
 ]
 
-// Mock challenges data
-const challenges = ref<Challenge[]>([
-  {
-    id: 1,
-    title: 'Baby SQL',
-    description: '一个简单的 SQL 注入漏洞，适合入门学习。尝试找出绕过登录验证的方法。',
-    category: 'Web',
-    difficulty: 'very easy',
-    points: 100,
-    solves: 256,
-    solved: true,
-    releaseDate: '2024-01-15',
-    author: 'admin',
-    hints: [{ cost: 10, unlocked: false }, { cost: 20, unlocked: false }],
-    attachments: [{ name: 'source.zip', url: '#' }]
-  },
-  {
-    id: 2,
-    title: 'Buffer Overflow 101',
-    description: '学习基本的栈溢出漏洞利用技术，覆盖返回地址实现代码执行。',
-    category: 'Pwn',
-    difficulty: 'easy',
-    points: 150,
-    solves: 189,
-    solved: false,
-    releaseDate: '2024-01-20',
-    author: 'pwner',
-    hints: [{ cost: 15, unlocked: false }],
-    attachments: [{ name: 'vuln', url: '#' }, { name: 'libc.so.6', url: '#' }]
-  },
-  {
-    id: 3,
-    title: 'RSA Beginner',
-    description: '经典的 RSA 加密算法攻击，给定公钥和密文，恢复明文。',
-    category: 'Crypto',
-    difficulty: 'very easy',
-    points: 100,
-    solves: 312,
-    solved: true,
-    releaseDate: '2024-01-18',
-    author: 'crypto_master',
-    hints: [{ cost: 10, unlocked: true }],
-    attachments: [{ name: 'output.txt', url: '#' }]
-  },
-  {
-    id: 4,
-    title: 'CrackMe #1',
-    description: '分析这个简单的 CrackMe 程序，找出正确的序列号。',
-    category: 'Reverse',
-    difficulty: 'easy',
-    points: 150,
-    solves: 145,
-    solved: false,
-    releaseDate: '2024-01-22',
-    author: 'reverser',
-    attachments: [{ name: 'crackme.exe', url: '#' }]
-  },
-  {
-    id: 5,
-    title: 'Hidden Message',
-    description: '图片中隐藏了一段秘密信息，你能找到它吗？',
-    category: 'Misc',
-    difficulty: 'very easy',
-    points: 50,
-    solves: 420,
-    solved: true,
-    releaseDate: '2024-01-10',
-    author: 'misc_king',
-    attachments: [{ name: 'secret.png', url: '#' }]
-  },
-  {
-    id: 6,
-    title: 'Smart Contract Vuln',
-    description: '分析这个智能合约，找出其中的漏洞并利用它。',
-    category: 'Blockchain',
-    difficulty: 'hard',
-    points: 400,
-    solves: 23,
-    solved: false,
-    releaseDate: '2024-02-01',
-    author: 'blockchain_dev',
-    hints: [{ cost: 50, unlocked: false }],
-    attachments: [{ name: 'contract.sol', url: '#' }]
-  },
-  {
-    id: 7,
-    title: 'XSS Playground',
-    description: '在这个网页应用中找到 XSS 漏洞，弹出 alert 即可。',
-    category: 'Web',
-    difficulty: 'easy',
-    points: 120,
-    solves: 198,
-    solved: false,
-    releaseDate: '2024-01-25',
-    author: 'admin'
-  },
-  {
-    id: 8,
-    title: 'Heap Exploitation',
-    description: '利用堆漏洞获取 shell，考察 heap overflow 和 UAF 技术。',
-    category: 'Pwn',
-    difficulty: 'hard',
-    points: 350,
-    solves: 34,
-    solved: false,
-    releaseDate: '2024-02-05',
-    author: 'pwner',
-    hints: [{ cost: 30, unlocked: false }, { cost: 50, unlocked: false }],
-    attachments: [{ name: 'heap_chall', url: '#' }]
-  },
-  {
-    id: 9,
-    title: 'ECC Attack',
-    description: '椭圆曲线加密的漏洞利用，需要一定的数学基础。',
-    category: 'Crypto',
-    difficulty: 'medium',
-    points: 250,
-    solves: 67,
-    solved: false,
-    releaseDate: '2024-01-28',
-    author: 'crypto_master',
-    attachments: [{ name: 'ecc.py', url: '#' }, { name: 'output.txt', url: '#' }]
-  },
-  {
-    id: 10,
-    title: 'Obfuscated Code',
-    description: '这段代码被重度混淆，你能还原出原始逻辑吗？',
-    category: 'Reverse',
-    difficulty: 'medium',
-    points: 200,
-    solves: 89,
-    solved: false,
-    releaseDate: '2024-01-30',
-    author: 'reverser',
-    attachments: [{ name: 'obfuscated', url: '#' }]
-  },
-  {
-    id: 11,
-    title: 'Forensics 101',
-    description: '分析这个内存转储文件，找出攻击者留下的痕迹。',
-    category: 'Misc',
-    difficulty: 'medium',
-    points: 200,
-    solves: 78,
-    solved: false,
-    releaseDate: '2024-02-02',
-    author: 'forensic_expert',
-    attachments: [{ name: 'memory.dmp', url: '#' }]
-  },
-  {
-    id: 12,
-    title: 'Re-entrancy Attack',
-    description: '经典的重入攻击，从合约中提取所有资金。',
-    category: 'Blockchain',
-    difficulty: 'medium',
-    points: 300,
-    solves: 45,
-    solved: false,
-    releaseDate: '2024-02-08',
-    author: 'blockchain_dev',
-    attachments: [{ name: 'bank.sol', url: '#' }]
-  }
-])
+// Challenge list data
+const challenges = ref<ChallengeListItem[]>([])
+const isLoadingList = ref(false)
+const listError = ref<string | null>(null)
 
-const totalChallenges = computed(() => challenges.value.length)
-
-const filteredChallenges = computed(() => {
-  let result = [...challenges.value]
-
-  // Search filter
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter(c =>
-      c.title.toLowerCase().includes(query)
-      || c.description.toLowerCase().includes(query)
-    )
+/**
+ * Fetch challenges from API with filters and pagination
+ */
+const fetchChallenges = async () => {
+  const token = storedUser.value?.token
+  if (!token) {
+    listError.value = '请先登录'
+    return
   }
 
-  // Category filter
-  if (selectedCategory.value) {
-    result = result.filter(c => c.category === selectedCategory.value)
-  }
+  isLoadingList.value = true
+  listError.value = null
 
-  // Difficulty filter
-  if (selectedDifficulty.value) {
-    result = result.filter(c => c.difficulty === selectedDifficulty.value)
-  }
+  try {
+    // Build query params
+    const params = new URLSearchParams()
+    if (selectedCategory.value) params.append('category', selectedCategory.value)
+    if (selectedDifficulty.value) params.append('difficulty', selectedDifficulty.value)
+    if (selectedStatus.value) params.append('solved', selectedStatus.value)
+    if (sortBy.value) params.append('sortBy', sortBy.value)
+    params.append('page', currentPage.value.toString())
 
-  // Status filter
-  if (selectedStatus.value === 'solved') {
-    result = result.filter(c => c.solved)
-  } else if (selectedStatus.value === 'unsolved') {
-    result = result.filter(c => !c.solved)
-  }
+    const url = `/api/challenges?${params.toString()}`
 
-  // Sort
-  switch (sortBy.value) {
-    case 'newest':
-      result.sort((a, b) => new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime())
-      break
-    case 'most-solves':
-      result.sort((a, b) => b.solves - a.solves)
-      break
-    case 'least-solves':
-      result.sort((a, b) => a.solves - b.solves)
-      break
-    case 'highest-points':
-      result.sort((a, b) => b.points - a.points)
-      break
-  }
+    const response = await $fetch<ApiResponse<PaginatedResponse<ChallengeListItem>>>(url, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
 
-  return result
+    if (response.code === 200 && response.data) {
+      challenges.value = response.data.records
+      totalItems.value = response.data.total
+      totalPages.value = response.data.pages
+    } else {
+      listError.value = response.message || '获取挑战列表失败'
+    }
+  } catch (e: unknown) {
+    const fetchError = e as { data?: ApiResponse; status?: number }
+    if (fetchError.status === 401) {
+      listError.value = '登录已过期，请重新登录'
+    } else {
+      listError.value = fetchError?.data?.message || '获取挑战列表失败'
+    }
+  } finally {
+    isLoadingList.value = false
+  }
+}
+
+// Fetch challenges on mount and when filters change
+onMounted(() => {
+  initUser()
+  fetchChallenges()
 })
 
-const paginatedChallenges = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredChallenges.value.slice(start, end)
-})
-
-// Reset page when filters change
-watch([searchQuery, selectedCategory, selectedDifficulty, selectedStatus, sortBy], () => {
+watch([selectedCategory, selectedDifficulty, selectedStatus, sortBy], () => {
   currentPage.value = 1
+  fetchChallenges()
 })
+
+// Fetch new page when page changes
+watch(currentPage, () => {
+  fetchChallenges()
+})
+
+const totalChallenges = computed(() => totalItems.value)
+
+// Local text search only (API handles other filters and pagination)
+const filteredChallenges = computed(() => {
+  if (!searchQuery.value) {
+    return challenges.value
+  }
+
+  const query = searchQuery.value.toLowerCase()
+  return challenges.value.filter(c =>
+    c.title.toLowerCase().includes(query)
+    || c.description.toLowerCase().includes(query)
+  )
+})
+
+// Reset search when changing filters
+watch(searchQuery, () => {
+  // Search is local only, no need to refetch
+})
+
+/**
+ * Capitalize first letter for display
+ */
+const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
 
 const getCategoryIcon = (category: string) => {
+  const cat = capitalize(category)
   const icons: Record<string, string> = {
     Web: 'i-lucide-globe',
     Pwn: 'i-lucide-bug',
@@ -671,10 +721,11 @@ const getCategoryIcon = (category: string) => {
     Misc: 'i-lucide-puzzle',
     Blockchain: 'i-lucide-link'
   }
-  return icons[category] || 'i-lucide-flag'
+  return icons[cat] || 'i-lucide-flag'
 }
 
 const getCategoryColor = (category: string) => {
+  const cat = capitalize(category)
   const colors: Record<string, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
     Web: 'primary',
     Pwn: 'error',
@@ -683,10 +734,11 @@ const getCategoryColor = (category: string) => {
     Misc: 'success',
     Blockchain: 'secondary'
   }
-  return colors[category] || 'neutral'
+  return colors[cat] || 'neutral'
 }
 
 const getCategoryBgClass = (category: string) => {
+  const cat = capitalize(category)
   const classes: Record<string, string> = {
     Web: 'bg-primary-100 dark:bg-primary-900/30',
     Pwn: 'bg-red-100 dark:bg-red-900/30',
@@ -695,10 +747,11 @@ const getCategoryBgClass = (category: string) => {
     Misc: 'bg-green-100 dark:bg-green-900/30',
     Blockchain: 'bg-purple-100 dark:bg-purple-900/30'
   }
-  return classes[category] || 'bg-gray-100 dark:bg-gray-800'
+  return classes[cat] || 'bg-gray-100 dark:bg-gray-800'
 }
 
 const getCategoryIconClass = (category: string) => {
+  const cat = capitalize(category)
   const classes: Record<string, string> = {
     Web: 'text-primary-600 dark:text-primary-400',
     Pwn: 'text-red-600 dark:text-red-400',
@@ -707,46 +760,318 @@ const getCategoryIconClass = (category: string) => {
     Misc: 'text-green-600 dark:text-green-400',
     Blockchain: 'text-purple-600 dark:text-purple-400'
   }
-  return classes[category] || 'text-gray-600 dark:text-gray-400'
+  return classes[cat] || 'text-gray-600 dark:text-gray-400'
 }
 
 const getDifficultyColor = (difficulty: string) => {
+  const diff = difficulty.toUpperCase()
   const colors: Record<string, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
-    'very easy': 'success',
-    'easy': 'info',
-    'medium': 'warning',
-    'hard': 'error',
-    'insane': 'error'
+    EASY: 'success',
+    MEDIUM: 'warning',
+    HARD: 'error'
   }
-  return colors[difficulty] || 'neutral'
+  return colors[diff] || 'neutral'
 }
 
-const openChallenge = (challenge: Challenge) => {
-  selectedChallenge.value = challenge
+/**
+ * Fetch challenge details from API
+ */
+const fetchChallengeDetail = async (challengeId: number): Promise<ChallengeDetail | null> => {
+  const token = storedUser.value?.token
+  if (!token) {
+    toast.add({
+      title: '请先登录',
+      color: 'error'
+    })
+    return null
+  }
+
+  try {
+    const response = await $fetch<ApiResponse<ChallengeDetail>>(`/api/challenges/${challengeId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+
+    if (response.code === 200 && response.data) {
+      return response.data
+    } else {
+      detailError.value = response.message || '获取题目详情失败'
+      return null
+    }
+  } catch (e: unknown) {
+    const fetchError = e as { data?: ApiResponse; status?: number }
+    detailError.value = fetchError?.data?.message || '获取题目详情失败'
+    return null
+  }
+}
+
+/**
+ * Open challenge modal and fetch details
+ */
+const openChallenge = async (challenge: ChallengeListItem) => {
+  // Open modal immediately with basic info
+  selectedChallenge.value = {
+    ...challenge,
+    author: '' // Placeholder until loaded
+  }
   flagInput.value = ''
+  isLoadingDetail.value = true
+  detailError.value = null
   isChallengeModalOpen.value = true
+
+  // Fetch full details from API
+  const detail = await fetchChallengeDetail(challenge.id)
+  if (detail) {
+    selectedChallenge.value = detail
+  }
+  isLoadingDetail.value = false
+}
+
+/**
+ * Submit flag response interface
+ */
+interface SubmitFlagResponse {
+  correct: boolean
+  pointsAwarded: number | null
+  message: string
+  totalScore: number
+  rank: number
 }
 
 const submitFlag = async () => {
   if (!flagInput.value || !selectedChallenge.value) return
 
+  const token = storedUser.value?.token
+  if (!token) {
+    toast.add({
+      title: '请先登录',
+      color: 'error'
+    })
+    return
+  }
+
   isSubmitting.value = true
 
   try {
-    // TODO: 实现 Flag 提交 API
-    console.log('Submitting flag:', flagInput.value, 'for challenge:', selectedChallenge.value.id)
+    const response = await $fetch<ApiResponse<SubmitFlagResponse>>('/api/challenges/submit', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        challengeId: selectedChallenge.value.id,
+        flag: flagInput.value
+      }
+    })
 
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // Mock success
-    alert('Flag 正确！恭喜你完成了这道挑战！')
-    isChallengeModalOpen.value = false
-  } catch (error) {
-    console.error('Flag submission failed:', error)
-    alert('Flag 错误，请再试一次！')
+    if (response.code === 200 && response.data) {
+      const data = response.data
+      if (data.correct) {
+        toast.add({
+          title: data.message,
+          description: `获得 ${data.pointsAwarded} 分！当前排名：${data.rank}`,
+          color: 'success'
+        })
+        selectedChallenge.value.solved = true
+        flagInput.value = ''
+        // Refresh challenge list to update solved status
+        fetchChallenges()
+      } else {
+        toast.add({
+          title: data.message,
+          color: 'error'
+        })
+      }
+    } else {
+      toast.add({
+        title: response.message || 'Flag 提交失败',
+        color: 'error'
+      })
+    }
+  } catch (e: unknown) {
+    const fetchError = e as { data?: ApiResponse; status?: number }
+    if (fetchError.status === 429) {
+      toast.add({
+        title: '提交过于频繁',
+        description: '请稍后再试',
+        color: 'warning'
+      })
+    } else if (fetchError.status === 401) {
+      toast.add({
+        title: '登录已过期',
+        description: '请重新登录',
+        color: 'error'
+      })
+    } else {
+      toast.add({
+        title: fetchError?.data?.message || 'Flag 提交失败',
+        color: 'error'
+      })
+    }
   } finally {
     isSubmitting.value = false
   }
+}
+
+/**
+ * Download attachment via API
+ */
+const downloadAttachment = (attachment: Attachment) => {
+  // Open attachment URL in new window to trigger download
+  // URL format: /api/attachments/download?path=...
+  window.open(attachment.url, '_blank')
+}
+
+/**
+ * Unlock hint response interface
+ */
+interface UnlockHintResponse {
+  hintId: number
+  content: string
+  cost: number
+  remainingScore: number
+}
+
+/**
+ * Unlock hint via API
+ */
+const unlockHint = async (hint: Hint) => {
+  const token = storedUser.value?.token
+  if (!token) {
+    toast.add({
+      title: '请先登录',
+      color: 'error'
+    })
+    return
+  }
+
+  // If already unlocked, just show the content
+  if (hint.unlocked && hint.content) {
+    return
+  }
+
+  try {
+    const response = await $fetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        hintId: hint.id
+      }
+    })
+
+    if (response.code === 200 && response.data) {
+      const data = response.data
+      // Update the hint in selectedChallenge
+      if (selectedChallenge.value?.hints) {
+        const hintIndex = selectedChallenge.value.hints.findIndex(h => h.id === hint.id)
+        if (hintIndex !== -1) {
+          const targetHint = selectedChallenge.value.hints[hintIndex]
+          if (targetHint) {
+            targetHint.unlocked = true
+            targetHint.content = data.content
+          }
+        }
+      }
+
+      if (data.cost > 0) {
+        toast.add({
+          title: '提示已解锁',
+          description: `花费 ${data.cost} 积分，剩余 ${data.remainingScore} 积分`,
+          color: 'success'
+        })
+      } else {
+        toast.add({
+          title: '提示内容',
+          description: data.content,
+          color: 'info'
+        })
+      }
+    } else {
+      toast.add({
+        title: response.message || '解锁提示失败',
+        color: 'error'
+      })
+    }
+  } catch (e: unknown) {
+    const fetchError = e as { data?: ApiResponse; status?: number }
+    if (fetchError.status === 429) {
+      toast.add({
+        title: '请求过于频繁',
+        description: '请稍后再试',
+        color: 'warning'
+      })
+    } else if (fetchError.status === 400) {
+      toast.add({
+        title: fetchError?.data?.message || '积分不足',
+        color: 'error'
+      })
+    } else if (fetchError.status === 401) {
+      toast.add({
+        title: '登录已过期',
+        description: '请重新登录',
+        color: 'error'
+      })
+    } else if (fetchError.status === 404) {
+      toast.add({
+        title: '提示不存在',
+        color: 'error'
+      })
+    } else {
+      toast.add({
+        title: fetchError?.data?.message || '解锁提示失败',
+        color: 'error'
+      })
+    }
+  }
+}
+
+/**
+ * Simple markdown renderer
+ * For production, consider using a library like marked or markdown-it
+ */
+const renderMarkdown = (content: string): string => {
+  // Basic XSS prevention - escape HTML entities first
+  const escapeHtml = (str: string) => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
+
+  let html = escapeHtml(content)
+
+  // Convert markdown to HTML (basic support)
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-3 mb-2">$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold mt-4 mb-2">$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2">$1</h1>')
+
+  // Code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto my-2"><code>$2</code></pre>')
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 px-1 rounded text-sm">$1</code>')
+
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+
+  // Italic
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
+
+  // Links (already escaped, so we need to handle carefully)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-500 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
+
+  // Line breaks
+  html = html.replace(/\n/g, '<br>')
+
+  return html
 }
 </script>
 
