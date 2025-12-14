@@ -93,11 +93,11 @@
             />
           </UFormField>
 
-          <!-- Email Field -->
+          <!-- Email Field (Optional) -->
           <UFormField
             label="邮箱"
             name="email"
-            required
+            hint="可选"
           >
             <UInput
               v-model="formState.email"
@@ -158,47 +158,64 @@
             </div>
           </UFormField>
 
-          <!-- Confirm Password Field -->
+          <!-- Nickname Field (Optional) -->
           <UFormField
-            label="确认密码"
-            name="confirmPassword"
-            required
-          >
-            <UInput
-              v-model="formState.confirmPassword"
-              :type="showConfirmPassword ? 'text' : 'password'"
-              placeholder="再次输入密码"
-              icon="i-lucide-shield-check"
-              size="lg"
-              autocomplete="new-password"
-              class="form-input"
-            >
-              <template #trailing>
-                <UButton
-                  :icon="showConfirmPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  :aria-label="showConfirmPassword ? '隐藏密码' : '显示密码'"
-                  @click="showConfirmPassword = !showConfirmPassword"
-                />
-              </template>
-            </UInput>
-          </UFormField>
-
-          <!-- Invite Code Field (Optional) -->
-          <UFormField
-            label="邀请码"
-            name="inviteCode"
+            label="昵称"
+            name="nickname"
             hint="可选"
           >
             <UInput
-              v-model="formState.inviteCode"
-              placeholder="输入邀请码（可选）"
-              icon="i-lucide-ticket"
+              v-model="formState.nickname"
+              placeholder="输入昵称（可选）"
+              icon="i-lucide-smile"
               size="lg"
               class="form-input"
             />
+          </UFormField>
+
+          <!-- Captcha Field -->
+          <UFormField
+            label="验证码"
+            name="captchaCode"
+            required
+          >
+            <div class="flex gap-3">
+              <UInput
+                v-model="formState.captchaCode"
+                placeholder="输入验证码"
+                icon="i-lucide-shield"
+                size="lg"
+                class="form-input flex-1"
+                autocomplete="off"
+              />
+              <div
+                class="captcha-image-container flex-shrink-0 h-10 w-[130px] rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity bg-white dark:bg-gray-800"
+                :title="captchaLoading ? '加载中...' : '点击刷新验证码'"
+                @click="refreshCaptcha"
+              >
+                <img
+                  v-if="captchaImage"
+                  :src="captchaImage"
+                  alt="验证码"
+                  class="h-full w-full object-fill"
+                >
+                <div
+                  v-else
+                  class="h-full w-full flex items-center justify-center bg-gray-100 dark:bg-gray-800"
+                >
+                  <UIcon
+                    v-if="captchaLoading"
+                    name="i-lucide-loader-2"
+                    class="w-5 h-5 animate-spin text-gray-400"
+                  />
+                  <UIcon
+                    v-else
+                    name="i-lucide-refresh-cw"
+                    class="w-5 h-5 text-gray-400"
+                  />
+                </div>
+              </div>
+            </div>
           </UFormField>
 
           <!-- Terms Checkbox -->
@@ -302,12 +319,40 @@
 <script setup lang="ts">
 import type { FormSubmitEvent } from '#ui/types'
 
+/**
+ * API response interface
+ */
+interface ApiResponse<T = unknown> {
+  code: number
+  message: string
+  data: T
+}
+
+/**
+ * Captcha response data
+ */
+interface CaptchaData {
+  captchaId: string
+  image: string
+}
+
+/**
+ * Register response data
+ */
+interface RegisterData {
+  token: string
+  userId: number
+  username: string
+  nickname: string
+  role: 'USER' | 'ADMIN'
+}
+
 interface FormState {
   username: string
   email: string
   password: string
-  confirmPassword: string
-  inviteCode: string
+  nickname: string
+  captchaCode: string
   acceptTerms: boolean
 }
 
@@ -316,18 +361,25 @@ useSeoMeta({
   description: '加入 NKCTF 网络安全竞赛训练平台，开始你的 CTF 之旅'
 })
 
+const toast = useToast()
+const { setStoredUser } = useUser()
+
 const formState = reactive<FormState>({
   username: '',
   email: '',
   password: '',
-  confirmPassword: '',
-  inviteCode: '',
+  nickname: '',
+  captchaCode: '',
   acceptTerms: false
 })
 
 const showPassword = ref(false)
-const showConfirmPassword = ref(false)
 const isLoading = ref(false)
+
+// Captcha state
+const captchaId = ref('')
+const captchaImage = ref('')
+const captchaLoading = ref(false)
 
 // Typewriter effect with multiple sentences
 const sentences = [
@@ -345,6 +397,9 @@ const pauseBeforeDelete = 2000
 const pauseBeforeType = 500
 
 onMounted(() => {
+  // Fetch captcha on mount
+  refreshCaptcha()
+
   let sentenceIndex = 0
   let charIndex = 0
   let isDeleting = false
@@ -387,7 +442,7 @@ const passwordStrength = computed(() => {
   if (!password) return 0
 
   let strength = 0
-  if (password.length >= 8) strength++
+  if (password.length >= 6) strength++
   if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++
   if (/\d/.test(password)) strength++
   if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) strength++
@@ -399,33 +454,65 @@ const strengthColors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-gree
 const strengthTextColors = ['text-red-500', 'text-orange-500', 'text-yellow-500', 'text-green-500']
 const strengthLabels = ['', '弱', '一般', '强', '非常强']
 
+/**
+ * Fetch captcha image from server
+ */
+const refreshCaptcha = async () => {
+  if (captchaLoading.value) return
+
+  captchaLoading.value = true
+  formState.captchaCode = ''
+
+  try {
+    const response = await $fetch<ApiResponse<CaptchaData>>('/api/auth/captcha')
+
+    if (response.code === 200 && response.data) {
+      captchaId.value = response.data.captchaId
+      captchaImage.value = response.data.image
+    } else {
+      toast.add({
+        title: '获取验证码失败',
+        description: response.message || '请稍后重试',
+        color: 'error'
+      })
+    }
+  } catch (error: unknown) {
+    const fetchError = error as { data?: ApiResponse }
+    toast.add({
+      title: '获取验证码失败',
+      description: fetchError?.data?.message || '网络错误，请稍后重试',
+      color: 'error'
+    })
+  } finally {
+    captchaLoading.value = false
+  }
+}
+
 const validate = (state: FormState) => {
   const errors = []
 
   if (!state.username) {
     errors.push({ path: 'username', message: '请输入用户名' })
-  } else if (state.username.length < 3) {
-    errors.push({ path: 'username', message: '用户名至少需要3个字符' })
-  } else if (!/^[a-zA-Z0-9_-]+$/.test(state.username)) {
-    errors.push({ path: 'username', message: '用户名只能包含字母、数字、下划线和连字符' })
+  } else if (state.username.length < 3 || state.username.length > 50) {
+    errors.push({ path: 'username', message: '用户名长度为 3-50 个字符' })
+  } else if (!/^[a-zA-Z0-9_]+$/.test(state.username)) {
+    errors.push({ path: 'username', message: '用户名只能包含字母、数字和下划线' })
   }
 
-  if (!state.email) {
-    errors.push({ path: 'email', message: '请输入邮箱' })
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email)) {
+  if (state.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email)) {
     errors.push({ path: 'email', message: '请输入有效的邮箱地址' })
   }
 
   if (!state.password) {
     errors.push({ path: 'password', message: '请输入密码' })
-  } else if (state.password.length < 8) {
-    errors.push({ path: 'password', message: '密码至少需要8个字符' })
+  } else if (state.password.length < 6 || state.password.length > 100) {
+    errors.push({ path: 'password', message: '密码长度为 6-100 个字符' })
   }
 
-  if (!state.confirmPassword) {
-    errors.push({ path: 'confirmPassword', message: '请确认密码' })
-  } else if (state.password !== state.confirmPassword) {
-    errors.push({ path: 'confirmPassword', message: '两次输入的密码不一致' })
+  if (!state.captchaCode) {
+    errors.push({ path: 'captchaCode', message: '请输入验证码' })
+  } else if (state.captchaCode.length < 4 || state.captchaCode.length > 6) {
+    errors.push({ path: 'captchaCode', message: '验证码为 4-6 个字符' })
   }
 
   if (!state.acceptTerms) {
@@ -436,19 +523,61 @@ const validate = (state: FormState) => {
 }
 
 const onSubmit = async (event: FormSubmitEvent<FormState>) => {
+  if (!captchaId.value) {
+    toast.add({
+      title: '请先获取验证码',
+      color: 'warning'
+    })
+    return
+  }
+
   isLoading.value = true
 
   try {
-    // TODO: 实现注册 API 调用
-    console.log('Register data:', event.data)
+    const response = await $fetch<ApiResponse<RegisterData>>('/api/auth/register', {
+      method: 'POST',
+      body: {
+        username: event.data.username,
+        password: event.data.password,
+        email: event.data.email || undefined,
+        nickname: event.data.nickname || undefined,
+        captchaId: captchaId.value,
+        captchaCode: event.data.captchaCode
+      }
+    })
 
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    if (response.code === 200 && response.data) {
+      // 注册成功后自动登录，保存 token 和用户信息到状态和 localStorage
+      setStoredUser(response.data)
 
-    // 注册成功后跳转
-    navigateTo('/login')
-  } catch (error) {
-    console.error('Registration failed:', error)
+      toast.add({
+        title: '注册成功',
+        description: `欢迎加入，${response.data.nickname}`,
+        color: 'success'
+      })
+
+      // 跳转到首页
+      navigateTo('/')
+    } else {
+      toast.add({
+        title: '注册失败',
+        description: response.message || '未知错误',
+        color: 'error'
+      })
+      // 刷新验证码
+      refreshCaptcha()
+    }
+  } catch (error: unknown) {
+    const fetchError = error as { data?: ApiResponse }
+    const errorMessage = fetchError?.data?.message || '网络错误，请稍后重试'
+
+    toast.add({
+      title: '注册失败',
+      description: errorMessage,
+      color: 'error'
+    })
+    // 刷新验证码
+    refreshCaptcha()
   } finally {
     isLoading.value = false
   }

@@ -77,15 +77,15 @@
           class="space-y-5"
           @submit="onSubmit"
         >
-          <!-- Username/Email Field -->
+          <!-- Username Field -->
           <UFormField
-            label="用户名或邮箱"
-            name="account"
+            label="用户名"
+            name="username"
             required
           >
             <UInput
-              v-model="formState.account"
-              placeholder="输入用户名或邮箱"
+              v-model="formState.username"
+              placeholder="输入用户名"
               icon="i-lucide-user"
               size="lg"
               autocomplete="username"
@@ -211,8 +211,28 @@
 <script setup lang="ts">
 import type { FormSubmitEvent } from '#ui/types'
 
+/**
+ * API response interface
+ */
+interface ApiResponse<T = unknown> {
+  code: number
+  message: string
+  data: T
+}
+
+/**
+ * Login response data
+ */
+interface LoginData {
+  token: string
+  userId: number
+  username: string
+  nickname: string
+  role: 'USER' | 'ADMIN'
+}
+
 interface FormState {
-  account: string
+  username: string
   password: string
   rememberMe: boolean
 }
@@ -222,8 +242,11 @@ useSeoMeta({
   description: '登录 NKCTF 网络安全竞赛训练平台，继续你的 CTF 之旅'
 })
 
+const toast = useToast()
+const { setStoredUser } = useUser()
+
 const formState = reactive<FormState>({
-  account: '',
+  username: '',
   password: '',
   rememberMe: false
 })
@@ -283,12 +306,16 @@ onMounted(() => {
 const validate = (state: FormState) => {
   const errors = []
 
-  if (!state.account) {
-    errors.push({ path: 'account', message: '请输入用户名或邮箱' })
+  if (!state.username) {
+    errors.push({ path: 'username', message: '请输入用户名' })
+  } else if (state.username.length < 3 || state.username.length > 50) {
+    errors.push({ path: 'username', message: '用户名长度为 3-50 个字符' })
   }
 
   if (!state.password) {
     errors.push({ path: 'password', message: '请输入密码' })
+  } else if (state.password.length < 6 || state.password.length > 100) {
+    errors.push({ path: 'password', message: '密码长度为 6-100 个字符' })
   }
 
   return errors
@@ -298,16 +325,43 @@ const onSubmit = async (event: FormSubmitEvent<FormState>) => {
   isLoading.value = true
 
   try {
-    // TODO: 实现登录 API 调用
-    console.log('Login data:', event.data)
+    const response = await $fetch<ApiResponse<LoginData>>('/api/auth/login', {
+      method: 'POST',
+      body: {
+        username: event.data.username,
+        password: event.data.password
+      }
+    })
 
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    if (response.code === 200 && response.data) {
+      // 保存 token 和用户信息到状态和 localStorage
+      setStoredUser(response.data)
 
-    // 登录成功后跳转
-    navigateTo('/')
-  } catch (error) {
-    console.error('Login failed:', error)
+      toast.add({
+        title: '登录成功',
+        description: `欢迎回来，${response.data.nickname}`,
+        color: 'success'
+      })
+
+      // 跳转到首页
+      navigateTo('/')
+    } else {
+      toast.add({
+        title: '登录失败',
+        description: response.message || '未知错误',
+        color: 'error'
+      })
+    }
+  } catch (error: unknown) {
+    // 处理 HTTP 错误
+    const fetchError = error as { data?: ApiResponse }
+    const errorMessage = fetchError?.data?.message || '网络错误，请稍后重试'
+
+    toast.add({
+      title: '登录失败',
+      description: errorMessage,
+      color: 'error'
+    })
   } finally {
     isLoading.value = false
   }
