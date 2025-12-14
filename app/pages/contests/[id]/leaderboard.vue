@@ -130,7 +130,7 @@
             <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
               <tr
                 v-for="entry in entries"
-                :key="entry.id"
+                :key="entry.participantId"
                 class="leaderboard-row hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
                 :class="getRankRowClass(entry.rank)"
               >
@@ -153,14 +153,13 @@
                 </td>
 
                 <!-- Name (User or Team based on isTeamCompetition) -->
-                <!-- TODO: Display team name when isTeamCompetition is true, user nickname otherwise -->
                 <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">
                   {{ entry.name }}
                 </td>
 
                 <!-- Points -->
                 <td class="px-4 py-3 font-semibold text-primary-600 dark:text-primary-400">
-                  {{ entry.points.toLocaleString() }}
+                  {{ entry.score.toLocaleString() }}
                 </td>
 
                 <!-- Solved Count -->
@@ -170,7 +169,7 @@
 
                 <!-- Last Submit Time -->
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                  {{ entry.lastSubmitTime }}
+                  {{ formatDateTime(entry.lastSubmitTime) }}
                 </td>
               </tr>
             </tbody>
@@ -235,7 +234,7 @@
 
               <!-- Points -->
               <td class="px-4 py-4 w-28 font-bold text-primary-600 dark:text-primary-400">
-                {{ currentUserRank.points.toLocaleString() }}
+                {{ currentUserRank.score.toLocaleString() }}
               </td>
 
               <!-- Solved Count -->
@@ -245,7 +244,7 @@
 
               <!-- Last Submit Time -->
               <td class="px-4 py-4 w-44 text-sm text-gray-600 dark:text-gray-400">
-                {{ currentUserRank.lastSubmitTime }}
+                {{ formatDateTime(currentUserRank.lastSubmitTime) }}
               </td>
             </tr>
           </tbody>
@@ -256,75 +255,50 @@
 </template>
 
 <script setup lang="ts">
-interface ContestLeaderboardEntry {
-  id: number
-  rank: number
-  /** User nickname for individual competition, team name for team competition */
-  name: string
-  points: number
-  solvedCount: number
-  lastSubmitTime: string
-}
+import type { LeaderboardEntry } from '~/composables/useContests'
 
 const route = useRoute()
-const { currentContest, contests, isLoading, fetchContest, fetchContests } = useContests()
+const toast = useToast()
+const {
+  currentContest,
+  contests,
+  competitionLeaderboard,
+  fetchContest,
+  fetchContests,
+  fetchCompetitionLeaderboard
+} = useContests()
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
 
 // Leaderboard state
-const entries = ref<ContestLeaderboardEntry[]>([])
-const total = ref(0)
-const currentUserRank = ref<ContestLeaderboardEntry | null>(null)
 const isLoadingLeaderboard = ref(false)
 const currentPage = ref(1)
 const pageSize = 50
 
+// Computed entries from competitionLeaderboard
+const entries = computed(() => competitionLeaderboard.value?.entries || [])
+const total = computed(() => entries.value.length)
+const currentUserRank = computed(() => competitionLeaderboard.value?.currentRank || null)
+
 /**
  * Fetch contest leaderboard from the backend
- * TODO: Replace with actual API call when backend is ready
- * TODO: API should return different data based on isTeamCompetition:
- *       - Individual: user nickname
- *       - Team: team name
+ * GET /api/competitions/{competitionId}/leaderboard
  */
-const fetchLeaderboard = async (page: number = 1) => {
+const fetchLeaderboard = async () => {
   isLoadingLeaderboard.value = true
 
-  try {
-    // TODO: Replace with actual API endpoint
-    // const response = await $fetch(`/api/contests/${contestId.value}/leaderboard`, {
-    //   params: { page, pageSize }
-    // })
+  const result = await fetchCompetitionLeaderboard(contestId.value)
 
-    // Mock data for demonstration
-    await new Promise(resolve => setTimeout(resolve, 300))
-
-    const isTeam = currentContest.value?.isTeamCompetition ?? false
-    const mockEntries = generateMockLeaderboardEntries(30, isTeam)
-    const start = (page - 1) * pageSize
-    const end = start + pageSize
-
-    entries.value = mockEntries.slice(start, end)
-    total.value = mockEntries.length
-
-    // Mock current user/team rank
-    currentUserRank.value = {
-      id: 999,
-      rank: 12,
-      name: isTeam ? 'NKSec 战队' : 'Hacker_001',
-      points: 850,
-      solvedCount: 8,
-      lastSubmitTime: '2024-02-10 15:30'
-    }
+  if (!result.success) {
+    toast.add({
+      title: '加载失败',
+      description: result.error || '获取排行榜失败',
+      color: 'error'
+    })
   }
-  catch (e) {
-    console.error('获取排行榜失败:', e)
-    entries.value = []
-    total.value = 0
-  }
-  finally {
-    isLoadingLeaderboard.value = false
-  }
+
+  isLoadingLeaderboard.value = false
 }
 
 // Load contest and leaderboard data
@@ -333,18 +307,25 @@ const loadData = async () => {
     await fetchContests()
   }
   await fetchContest(contestId.value)
-  await fetchLeaderboard(currentPage.value)
+  await fetchLeaderboard()
 }
 
 // Refresh leaderboard
 const refreshLeaderboard = () => {
-  fetchLeaderboard(currentPage.value)
+  fetchLeaderboard()
 }
 
-// Watch for page changes
-watch(currentPage, (page) => {
-  fetchLeaderboard(page)
-})
+// Format datetime
+const formatDateTime = (dateString: string) => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}`
+}
 
 // Helper functions
 const getRankTextClass = (rank: number) => {
@@ -384,49 +365,6 @@ const getRankRowClass = (rank: number) => {
     default:
       return ''
   }
-}
-
-/**
- * Generate mock leaderboard entries
- * TODO: Remove this function when backend is ready
- */
-function generateMockLeaderboardEntries(count: number, isTeam: boolean): ContestLeaderboardEntry[] {
-  const userNames = [
-    'CyberNinja', 'H4ck3rM4n', 'SecMaster', 'BinaryWizard', 'CryptoKing',
-    'PwnLord', 'ReverseGod', 'WebHunter', 'MiscMaster', 'FlagCatcher'
-  ]
-
-  const teamNames = [
-    'NKSec', 'CyberForce', 'HackTeam', 'SecElite', 'ByteWarriors',
-    'CodeBreakers', 'NetGuardians', 'DataMiners', 'ShellHunters', 'FlagHunters'
-  ]
-
-  const names = isTeam ? teamNames : userNames
-  const entries: ContestLeaderboardEntry[] = []
-
-  for (let i = 0; i < count; i++) {
-    const basePoints = Math.max(1500 - i * 45, 100)
-    const randomVariation = Math.floor(Math.random() * 30) - 15
-
-    entries.push({
-      id: i + 1,
-      rank: i + 1,
-      name: `${names[i % names.length]}${i >= names.length ? `_${Math.floor(i / names.length)}` : ''}`,
-      points: basePoints + randomVariation,
-      solvedCount: Math.max(Math.floor((basePoints + randomVariation) / 150), 1),
-      lastSubmitTime: generateRandomTime()
-    })
-  }
-
-  return entries
-}
-
-function generateRandomTime(): string {
-  const hours = Math.floor(Math.random() * 24)
-  const minutes = Math.floor(Math.random() * 60)
-  const month = Math.floor(Math.random() * 2) + 1
-  const day = Math.floor(Math.random() * 28) + 1
-  return `2024-0${month}-${String(day).padStart(2, '0')} ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
 }
 
 // SEO

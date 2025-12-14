@@ -176,7 +176,7 @@
                 />
                 <div class="flex items-center gap-2">
                   <UBadge
-                    :label="challenge.difficulty"
+                    :label="getDifficultyText(challenge.difficulty)"
                     :color="getDifficultyColor(challenge.difficulty)"
                     variant="solid"
                     size="xs"
@@ -238,6 +238,7 @@
     <UModal
       v-model:open="isChallengeModalOpen"
       class="max-w-2xl"
+      @close="closeModal"
     >
       <template #content>
         <UCard
@@ -263,7 +264,7 @@
                     size="xs"
                   />
                   <UBadge
-                    :label="selectedChallenge.difficulty"
+                    :label="getDifficultyText(selectedChallenge.difficulty)"
                     :color="getDifficultyColor(selectedChallenge.difficulty)"
                     variant="solid"
                     size="xs"
@@ -278,25 +279,116 @@
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                @click="isChallengeModalOpen = false"
+                @click="closeModal"
               />
             </div>
           </template>
 
           <div class="space-y-4">
-            <p class="text-gray-600 dark:text-gray-300">
-              {{ selectedChallenge.description }}
-            </p>
-
-            <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-              <span class="flex items-center gap-1">
-                <UIcon
-                  name="i-lucide-users"
-                  class="w-4 h-4"
-                />
-                {{ selectedChallenge.solves }} 人解决
-              </span>
+            <!-- Loading state for detail -->
+            <div
+              v-if="isLoadingDetail"
+              class="space-y-3"
+            >
+              <USkeleton class="h-4 w-full" />
+              <USkeleton class="h-4 w-full" />
+              <USkeleton class="h-4 w-3/4" />
             </div>
+
+            <!-- Challenge content -->
+            <template v-else>
+              <!-- Author and solves info -->
+              <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                <span
+                  v-if="currentChallengeDetail?.author"
+                  class="flex items-center gap-1"
+                >
+                  <UIcon
+                    name="i-lucide-user"
+                    class="w-4 h-4"
+                  />
+                  {{ currentChallengeDetail.author }}
+                </span>
+                <span class="flex items-center gap-1">
+                  <UIcon
+                    name="i-lucide-users"
+                    class="w-4 h-4"
+                  />
+                  {{ selectedChallenge.solves }} 人解决
+                </span>
+              </div>
+
+              <!-- Description / Content -->
+              <div class="prose prose-sm dark:prose-invert max-w-none">
+                <p class="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                  {{ currentChallengeDetail?.content || selectedChallenge.description }}
+                </p>
+              </div>
+
+              <!-- Hints -->
+              <div
+                v-if="currentChallengeDetail?.hints && currentChallengeDetail.hints.length > 0"
+                class="space-y-2"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  提示
+                </h4>
+                <div
+                  v-for="(hint, index) in currentChallengeDetail.hints"
+                  :key="hint.id"
+                  class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">
+                      提示 {{ index + 1 }}
+                    </span>
+                    <UBadge
+                      v-if="!hint.unlocked"
+                      :label="`${hint.cost} 积分`"
+                      color="warning"
+                      variant="soft"
+                      size="xs"
+                    />
+                  </div>
+                  <p
+                    v-if="hint.unlocked && hint.content"
+                    class="mt-1 text-sm text-gray-700 dark:text-gray-300"
+                  >
+                    {{ hint.content }}
+                  </p>
+                  <p
+                    v-else
+                    class="mt-1 text-sm text-gray-400 dark:text-gray-500 italic"
+                  >
+                    需要花费 {{ hint.cost }} 积分解锁
+                  </p>
+                </div>
+              </div>
+
+              <!-- Attachments -->
+              <div
+                v-if="currentChallengeDetail?.attachments && currentChallengeDetail.attachments.length > 0"
+                class="space-y-2"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  附件
+                </h4>
+                <div class="flex flex-wrap gap-2">
+                  <UButton
+                    v-for="attachment in currentChallengeDetail.attachments"
+                    :key="attachment.name"
+                    icon="i-lucide-download"
+                    color="neutral"
+                    variant="outline"
+                    size="sm"
+                    :to="attachment.url"
+                    target="_blank"
+                  >
+                    {{ attachment.name }}
+                  </UButton>
+                </div>
+              </div>
+            </template>
 
             <!-- Flag Submission -->
             <div
@@ -316,7 +408,7 @@
                 />
                 <UButton
                   :loading="isSubmitting"
-                  :disabled="selectedChallenge.solved"
+                  :disabled="selectedChallenge.solved || !flagInput.trim()"
                   @click="submitFlag"
                 >
                   {{ selectedChallenge.solved ? '已解决' : '提交' }}
@@ -345,20 +437,24 @@
 </template>
 
 <script setup lang="ts">
-interface Challenge {
-  id: number
-  title: string
-  description: string
-  category: string
-  difficulty: string
-  points: number
-  solves: number
-  solved: boolean
-}
+import type { CompetitionChallenge, CompetitionChallengeDetail } from '~/composables/useContests'
 
 const route = useRoute()
-const router = useRouter()
-const { currentContest, contests, isLoading, error, fetchContest, fetchContests, getStatusText, getStatusColor } = useContests()
+const toast = useToast()
+const {
+  currentContest,
+  contests,
+  currentChallengeDetail,
+  isLoading,
+  error,
+  fetchContest,
+  fetchContests,
+  fetchCompetitionChallengeDetail,
+  submitCompetitionFlag,
+  clearChallengeDetail,
+  getStatusText,
+  getStatusColor
+} = useContests()
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
@@ -366,74 +462,13 @@ const contestId = computed(() => Number(route.params.id))
 // Challenge state
 const selectedCategory = ref('all')
 const isChallengeModalOpen = ref(false)
-const selectedChallenge = ref<Challenge | null>(null)
+const selectedChallenge = ref<CompetitionChallenge | null>(null)
 const flagInput = ref('')
 const isSubmitting = ref(false)
+const isLoadingDetail = ref(false)
 
-// Mock challenges for this contest
-// TODO: Fetch from API based on contest ID
-const challenges = ref<Challenge[]>([
-  {
-    id: 1,
-    title: 'Web 签到',
-    description: '一道简单的 Web 签到题，让你熟悉比赛环境。',
-    category: 'Web',
-    difficulty: 'easy',
-    points: 100,
-    solves: 45,
-    solved: true
-  },
-  {
-    id: 2,
-    title: 'Baby Pwn',
-    description: '入门级 Pwn 题目，学习基本的栈溢出。',
-    category: 'Pwn',
-    difficulty: 'easy',
-    points: 100,
-    solves: 32,
-    solved: false
-  },
-  {
-    id: 3,
-    title: 'RSA 入门',
-    description: '简单的 RSA 加密题目。',
-    category: 'Crypto',
-    difficulty: 'easy',
-    points: 100,
-    solves: 38,
-    solved: true
-  },
-  {
-    id: 4,
-    title: 'SQL Master',
-    description: '进阶 SQL 注入挑战。',
-    category: 'Web',
-    difficulty: 'medium',
-    points: 200,
-    solves: 18,
-    solved: false
-  },
-  {
-    id: 5,
-    title: 'Heap Fun',
-    description: '堆利用题目，需要一定的 Pwn 基础。',
-    category: 'Pwn',
-    difficulty: 'hard',
-    points: 350,
-    solves: 5,
-    solved: false
-  },
-  {
-    id: 6,
-    title: 'Hidden Flag',
-    description: '图片隐写题目。',
-    category: 'Misc',
-    difficulty: 'easy',
-    points: 100,
-    solves: 42,
-    solved: true
-  }
-])
+// Use challenges from currentContest
+const challenges = computed(() => currentContest.value?.challenges || [])
 
 // Categories
 const categories = computed(() => {
@@ -458,55 +493,99 @@ const loadContest = async () => {
 }
 
 // Open challenge modal
-const openChallenge = (challenge: Challenge) => {
+const openChallenge = async (challenge: CompetitionChallenge) => {
   selectedChallenge.value = challenge
   flagInput.value = ''
   isChallengeModalOpen.value = true
+
+  // Fetch challenge detail
+  isLoadingDetail.value = true
+  const result = await fetchCompetitionChallengeDetail(contestId.value, challenge.id)
+  isLoadingDetail.value = false
+
+  if (!result.success) {
+    toast.add({
+      title: '加载失败',
+      description: result.error || '获取题目详情失败',
+      color: 'error'
+    })
+  }
+}
+
+// Close modal and clear detail
+const closeModal = () => {
+  isChallengeModalOpen.value = false
+  clearChallengeDetail()
 }
 
 // Submit flag
 const submitFlag = async () => {
-  if (!flagInput.value || !selectedChallenge.value) return
+  if (!flagInput.value.trim() || !selectedChallenge.value) return
 
   isSubmitting.value = true
+  const result = await submitCompetitionFlag(contestId.value, selectedChallenge.value.id, flagInput.value.trim())
+  isSubmitting.value = false
 
-  try {
-    // TODO: Implement flag submission API
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // Mock success
-    selectedChallenge.value.solved = true
-    isChallengeModalOpen.value = false
-    // TODO: Show success toast
-  }
-  catch (e) {
-    // TODO: Show error toast
-    console.error('Flag 提交失败:', e)
-  }
-  finally {
-    isSubmitting.value = false
+  if (result.success && result.data) {
+    if (result.data.correct) {
+      toast.add({
+        title: result.data.scored ? '🎉 Flag 正确！' : 'Flag 正确',
+        description: result.data.scored
+          ? `获得 ${result.data.pointsAwarded} 分，当前排名第 ${result.data.rank}`
+          : '比赛已结束，本次提交不计分',
+        color: 'success'
+      })
+      // Update local state
+      if (selectedChallenge.value) {
+        selectedChallenge.value.solved = true
+        selectedChallenge.value.solves++
+      }
+      closeModal()
+    } else {
+      toast.add({
+        title: 'Flag 错误',
+        description: result.data.message || '请再试一次',
+        color: 'error'
+      })
+    }
+  } else {
+    toast.add({
+      title: '提交失败',
+      description: result.error || '提交失败，请稍后再试',
+      color: 'error'
+    })
   }
 }
 
 // Helper functions
 const getCategoryColor = (category: string) => {
   const colors: Record<string, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
-    Web: 'primary',
-    Pwn: 'error',
-    Crypto: 'warning',
-    Reverse: 'info',
-    Misc: 'success'
+    web: 'primary',
+    pwn: 'error',
+    crypto: 'warning',
+    reverse: 'info',
+    misc: 'success',
+    blockchain: 'secondary'
   }
-  return colors[category] || 'neutral'
+  return colors[category.toLowerCase()] || 'neutral'
 }
 
 const getDifficultyColor = (difficulty: string) => {
   const colors: Record<string, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
-    easy: 'success',
-    medium: 'warning',
-    hard: 'error'
+    EASY: 'success',
+    MEDIUM: 'warning',
+    HARD: 'error'
   }
   return colors[difficulty] || 'neutral'
+}
+
+const getDifficultyText = (difficulty: string) => {
+  const textMap: Record<string, string> = {
+    EASY: '简单',
+    MEDIUM: '中等',
+    HARD: '困难'
+  }
+  return textMap[difficulty] || difficulty
 }
 
 // SEO

@@ -94,11 +94,19 @@
           >
             <!-- Status Badge -->
             <div class="flex items-center justify-between mb-3">
-              <UBadge
-                :label="getStatusText(contest.status)"
-                :color="getStatusColor(contest.status)"
-                variant="subtle"
-              />
+              <div class="flex items-center gap-2">
+                <UBadge
+                  :label="getStatusText(contest.status)"
+                  :color="getStatusColor(contest.status)"
+                  variant="subtle"
+                />
+                <UBadge
+                  :label="contest.isTeamCompetition ? '团队赛' : '个人赛'"
+                  :color="contest.isTeamCompetition ? 'info' : 'neutral'"
+                  variant="soft"
+                  size="xs"
+                />
+              </div>
               <span
                 v-if="contest.isRegistered"
                 class="text-xs text-green-600 dark:text-green-400 flex items-center gap-1"

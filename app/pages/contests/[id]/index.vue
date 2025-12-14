@@ -85,11 +85,18 @@
         >
           <!-- Status & Registration -->
           <div class="flex items-center justify-between mb-4">
-            <UBadge
-              :label="getStatusText(currentContest.status)"
-              :color="getStatusColor(currentContest.status)"
-              size="lg"
-            />
+            <div class="flex items-center gap-2">
+              <UBadge
+                :label="getStatusText(currentContest.status)"
+                :color="getStatusColor(currentContest.status)"
+                size="lg"
+              />
+              <UBadge
+                :label="currentContest.isTeamCompetition ? '团队赛' : '个人赛'"
+                :color="currentContest.isTeamCompetition ? 'info' : 'neutral'"
+                variant="soft"
+              />
+            </div>
             <span
               v-if="currentContest.isRegistered"
               class="text-sm text-green-600 dark:text-green-400 flex items-center gap-1"
@@ -175,8 +182,9 @@
             <UButton
               v-if="currentContest.status === 'inactive'"
               size="lg"
-              :disabled="currentContest.isRegistered"
-              @click="navigateTo(`/contests/${contestId}/register`)"
+              :disabled="currentContest.isRegistered || isRegistering || (currentContest.isTeamCompetition && !hasTeam)"
+              :loading="isRegistering"
+              @click="handleRegister"
             >
               <UIcon
                 name="i-lucide-user-plus"
@@ -200,6 +208,21 @@
               {{ currentContest.status === 'active' ? '参赛' : '回顾' }}
             </UButton>
 
+            <!-- Leaderboard Button (for active and ending status) -->
+            <UButton
+              v-if="currentContest.status === 'active' || currentContest.status === 'ending'"
+              size="lg"
+              variant="outline"
+              :disabled="!currentContest.isRegistered"
+              @click="navigateTo(`/contests/${contestId}/leaderboard`)"
+            >
+              <UIcon
+                name="i-lucide-trophy"
+                class="w-5 h-5 mr-2"
+              />
+              排行榜
+            </UButton>
+
             <!-- Back Button -->
             <UButton
               variant="outline"
@@ -214,6 +237,18 @@
             </UButton>
           </div>
 
+          <!-- Team Competition Warning -->
+          <p
+            v-if="currentContest.status === 'inactive' && currentContest.isTeamCompetition && !hasTeam && !currentContest.isRegistered"
+            class="mt-4 text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2"
+          >
+            <UIcon
+              name="i-lucide-alert-triangle"
+              class="w-4 h-4"
+            />
+            这是团队赛，请先加入或创建战队后再报名
+          </p>
+
           <!-- Not Registered Warning -->
           <p
             v-if="currentContest.status === 'active' && !currentContest.isRegistered"
@@ -223,7 +258,7 @@
               name="i-lucide-alert-triangle"
               class="w-4 h-4"
             />
-            您尚未报名此比赛，无法参赛
+            {{ currentContest.isTeamCompetition ? '您的队伍尚未报名此比赛，无法参赛' : '您尚未报名此比赛，无法参赛' }}
           </p>
         </UCard>
 
@@ -281,10 +316,15 @@
 <script setup lang="ts">
 const route = useRoute()
 const router = useRouter()
-const { currentContest, contests, isLoading, error, fetchContest, fetchContests, getStatusText, getStatusColor } = useContests()
+const toast = useToast()
+const { currentContest, contests, isLoading, error, fetchContest, fetchContests, registerContest, getStatusText, getStatusColor } = useContests()
+const { hasTeam, isLoggedIn } = useUser()
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
+
+// Registration state
+const isRegistering = ref(false)
 
 // Load contest data
 const loadContest = async () => {
@@ -293,6 +333,46 @@ const loadContest = async () => {
     await fetchContests()
   }
   await fetchContest(contestId.value)
+}
+
+// Handle registration
+const handleRegister = async () => {
+  if (!isLoggedIn.value) {
+    toast.add({
+      title: '请先登录',
+      description: '您需要登录后才能报名参赛',
+      color: 'warning'
+    })
+    navigateTo('/login')
+    return
+  }
+
+  if (currentContest.value?.isTeamCompetition && !hasTeam.value) {
+    toast.add({
+      title: '请先加入战队',
+      description: '这是团队赛，请先加入或创建战队后再报名',
+      color: 'warning'
+    })
+    return
+  }
+
+  isRegistering.value = true
+  const result = await registerContest(contestId.value)
+  isRegistering.value = false
+
+  if (result.success) {
+    toast.add({
+      title: '报名成功',
+      description: currentContest.value?.isTeamCompetition ? '您的队伍已成功报名' : '您已成功报名',
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: '报名失败',
+      description: result.error || '报名失败，请稍后再试',
+      color: 'error'
+    })
+  }
 }
 
 // Helper functions
