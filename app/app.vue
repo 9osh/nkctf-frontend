@@ -1,4 +1,11 @@
 <script setup lang="ts">
+const { storedUser, isLoggedIn, initUser, logout } = useUser()
+
+// Initialize user state from localStorage on mount
+onMounted(() => {
+  initUser()
+})
+
 useHead({
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1' }
@@ -27,6 +34,24 @@ const navLinks = [
   { label: '排行榜', to: '/leaderboard', icon: 'i-lucide-trophy' },
   { label: '学习', to: '/learn', icon: 'i-lucide-book-open' }
 ]
+
+const userMenuItems = computed(() => [
+  [{
+    label: storedUser.value?.nickname || storedUser.value?.username || '用户',
+    slot: 'account',
+    disabled: true
+  }],
+  [{
+    label: '个人中心',
+    icon: 'i-lucide-user',
+    to: '/profile'
+  }],
+  [{
+    label: '退出登录',
+    icon: 'i-lucide-log-out',
+    onSelect: () => logout()
+  }]
+])
 </script>
 
 <template>
@@ -48,22 +73,59 @@ const navLinks = [
       <template #right>
         <UColorModeButton />
 
-        <UButton
-          to="/login"
-          color="neutral"
-          variant="ghost"
-          aria-label="登录"
-        >
-          登录
-        </UButton>
+        <!-- Show login/register buttons when not logged in -->
+        <template v-if="!isLoggedIn">
+          <UButton
+            to="/login"
+            color="neutral"
+            variant="ghost"
+            aria-label="登录"
+          >
+            登录
+          </UButton>
 
-        <UButton
-          to="/register"
-          color="primary"
-          aria-label="注册"
+          <UButton
+            to="/register"
+            color="primary"
+            aria-label="注册"
+          >
+            注册
+          </UButton>
+        </template>
+
+        <!-- Show user dropdown when logged in -->
+        <UDropdownMenu
+          v-else
+          :items="userMenuItems"
+          :ui="{ content: 'min-w-48' }"
         >
-          注册
-        </UButton>
+          <UButton
+            color="neutral"
+            variant="ghost"
+            class="flex items-center gap-2"
+          >
+            <UAvatar
+              :alt="storedUser?.nickname || storedUser?.username"
+              size="xs"
+            />
+            <span class="hidden sm:inline">{{ storedUser?.nickname || storedUser?.username }}</span>
+            <UIcon
+              name="i-lucide-chevron-down"
+              class="w-4 h-4"
+            />
+          </UButton>
+
+          <template #account>
+            <div class="text-left">
+              <p class="font-medium truncate">
+                {{ storedUser?.nickname || storedUser?.username }}
+              </p>
+              <p class="text-xs text-muted truncate">
+                @{{ storedUser?.username }}
+              </p>
+            </div>
+          </template>
+        </UDropdownMenu>
       </template>
     </UHeader>
 
