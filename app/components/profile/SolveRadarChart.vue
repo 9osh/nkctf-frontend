@@ -200,6 +200,8 @@ const categories = computed(() => {
 // Tooltip methods
 const showTooltip = (index: number, event: MouseEvent) => {
   const category = categories.value[index]
+  if (!category) return
+
   tooltipData.value = {
     label: category.label,
     solved: category.value,
