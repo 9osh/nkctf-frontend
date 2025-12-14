@@ -123,7 +123,7 @@ nkctf-frontend/
 │   │   ├── challenges/      # 挑战相关组件
 │   │   ├── common/          # 通用组件
 │   │   ├── leaderboard/     # 排行榜组件
-│   │   └── ui/              # 基础 UI 组件
+│   │   └── ui/              # 基础 UI 组件（可结合 Nuxt UI）
 │   ├── composables/         # 组合式函数（自动导入）
 │   │   ├── useChallenges.ts # 挑战相关逻辑
 │   │   ├── useTerminal.ts   # 终端功能逻辑
@@ -136,8 +136,20 @@ nkctf-frontend/
 │   │   ├── challenges/
 │   │   │   ├── index.vue          # 挑战列表页
 │   │   │   └── [id].vue           # 挑战详情页（动态路由）
-│   │   ├── leaderboard.vue        # 排行榜
-│   │   ├── profile.vue            # 用户个人资料
+│   │   ├── profile/
+│   │   │   ├── index.vue          # 用户中心列表页
+│   │   │   └── [id].vue           # 特定用户详情页（动态路由）
+│   │   ├── leaderboard/
+│   │   │   └── index.vue          # 排行榜列表页
+│   │   ├── learn/
+│   │   │   ├── index.vue          # 学习指南列表页
+│   │   │   └── [id].vue           # 学习指南文章详情页（动态路由）
+│   │   ├── contests/
+│   │   │   ├── index.vue          # 竞赛列表页
+│   │   │   └── [id]/
+│   │   │       ├── challenges.vue # 竞赛赛题详情页（动态路由）
+│   │   │       ├── index.vue      # 竞赛详情页（动态路由）
+│   │   │       └── register.vue   # 竞赛报名页（动态路由）
 │   │   └── admin/                 # 管理后台
 │   ├── server/              # 服务器端 API 与逻辑
 │   │   ├── api/             # API 路由（如：提交 Flag）
@@ -383,8 +395,9 @@ pnpm typecheck
 ---
 
 <div align="center">
-**[⬆ 回到顶部](#nkctf-frontend)**
 
-Made with ❤️ by NKCTF Team
+[![回到顶部](https://img.shields.io/badge/回到顶部-⬆-blue?style=for-the-badge)](#nkctf-frontend)
+
+Made with ❤️ by **NKCTF Team**
 
 </div>

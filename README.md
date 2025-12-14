@@ -123,7 +123,7 @@ nkctf-frontend/
 │   │   ├── challenges/      # Challenge-related components
 │   │   ├── common/          # Common components
 │   │   ├── leaderboard/     # Leaderboard components
-│   │   └── ui/              # Basic UI components
+│   │   └── ui/              # Basic UI components (with Nuxt UI)
 │   ├── composables/         # Composable functions (auto-imported)
 │   │   ├── useChallenges.ts # Challenge-related logic
 │   │   ├── useTerminal.ts   # Terminal functionality logic
@@ -136,8 +136,20 @@ nkctf-frontend/
 │   │   ├── challenges/
 │   │   │   ├── index.vue          # Challenge list page
 │   │   │   └── [id].vue           # Challenge detail page (dynamic route)
-│   │   ├── leaderboard.vue        # Leaderboard
-│   │   ├── profile.vue            # User profile
+│   │   ├── profile/
+│   │   │   ├── index.vue          # User center page
+│   │   │   └── [id].vue           # Specific user profile page (dynamic route)
+│   │   ├── leaderboard/
+│   │   │   └── index.vue          # Leaderboard page
+│   │   ├── learn/
+│   │   │   ├── index.vue          # Learning guide list page
+│   │   │   └── [id].vue           # Learning guide article detail page (dynamic route)
+│   │   ├── contests/
+│   │   │   ├── index.vue          # Contest list page
+│   │   │   └── [id]/
+│   │   │       ├── challenges.vue # Contest challenges page (dynamic route)
+│   │   │       ├── index.vue      # Contest detail page (dynamic route)
+│   │   │       └── register.vue   # Contest registration page (dynamic route)
 │   │   └── admin/                 # Admin dashboard
 │   ├── server/              # Server-side API and logic
 │   │   ├── api/             # API routes (e.g., flag submission)
@@ -383,8 +395,9 @@ If you have any questions or suggestions, please contact us through:
 ---
 
 <div align="center">
-**[⬆ Back to Top](#nkctf-frontend)**
 
-Made with ❤️ by NKCTF Team
+[![Back to Top](https://img.shields.io/badge/Back_to_Top-⬆-blue?style=for-the-badge)](#nkctf-frontend)
+
+Made with ❤️ by **NKCTF Team**
 
 </div>
