@@ -151,7 +151,7 @@
 
                 <!-- Last Submit Time -->
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                  {{ entry.lastSubmitTime }}
+                  {{ formatDateTime(entry.lastSubmitTime) }}
                 </td>
               </tr>
             </tbody>
@@ -175,6 +175,29 @@
           </div>
         </div>
 
+        <!-- Error State -->
+        <div
+          v-if="error && !isLoading"
+          class="flex flex-col items-center justify-center py-16"
+        >
+          <UIcon
+            name="i-lucide-alert-circle"
+            class="w-16 h-16 text-red-400 dark:text-red-500 mb-4"
+          />
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            加载失败
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            {{ error }}
+          </p>
+          <UButton
+            icon="i-lucide-refresh-cw"
+            @click="refreshLeaderboard"
+          >
+            重试
+          </UButton>
+        </div>
+
         <!-- Pagination -->
         <div
           v-if="total > 0"
@@ -186,7 +209,7 @@
           <UPagination
             v-model="currentPage"
             :total="total"
-            :page-count="pageSize"
+            :items-per-page="pageSize"
           />
         </div>
       </div>
@@ -226,7 +249,7 @@
 
               <!-- Last Submit Time -->
               <td class="px-4 py-4 w-44 text-sm text-gray-600 dark:text-gray-400">
-                {{ currentUserRank.lastSubmitTime }}
+                {{ formatDateTime(currentUserRank.lastSubmitTime) }}
               </td>
             </tr>
           </tbody>
@@ -242,25 +265,45 @@ useSeoMeta({
   description: '查看 NKCTF 平台选手排名，了解最新竞赛排行情况'
 })
 
-const { entries, total, currentUserRank, isLoading, fetchLeaderboard } = useLeaderboard()
+const { entries, total, currentUserRank, isLoading, error, fetchLeaderboard } = useLeaderboard()
+const { initUser } = useUser()
 
-// Pagination
+// Pagination (API returns 50 items per page)
 const currentPage = ref(1)
 const pageSize = 50
 
 // Fetch leaderboard on page change
 watch(currentPage, (page) => {
-  fetchLeaderboard(page, pageSize)
+  fetchLeaderboard(page)
 })
 
 // Initial fetch
 onMounted(() => {
-  fetchLeaderboard(currentPage.value, pageSize)
+  initUser()
+  fetchLeaderboard(currentPage.value)
 })
 
 // Refresh function
 const refreshLeaderboard = () => {
-  fetchLeaderboard(currentPage.value, pageSize)
+  fetchLeaderboard(currentPage.value)
+}
+
+/**
+ * Format ISO 8601 datetime to readable format
+ */
+const formatDateTime = (isoString: string | null): string => {
+  if (!isoString) return '-'
+  try {
+    const date = new Date(isoString)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hours}:${minutes}`
+  } catch {
+    return isoString
+  }
 }
 
 // Helper functions
