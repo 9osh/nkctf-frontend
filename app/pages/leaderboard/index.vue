@@ -207,7 +207,7 @@
             显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, total) }} / {{ total }} 名
           </p>
           <UPagination
-            v-model="currentPage"
+            v-model:page="currentPage"
             :total="total"
             :items-per-page="pageSize"
           />

@@ -202,7 +202,7 @@
             显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, total) }} / {{ total }} {{ currentContest?.isTeamCompetition ? '支队伍' : '名选手' }}
           </p>
           <UPagination
-            v-model="currentPage"
+            v-model:page="currentPage"
             :total="total"
             :page-count="pageSize"
           />

@@ -165,7 +165,7 @@
           显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, filteredArticles.length) }} / {{ filteredArticles.length }} 篇
         </p>
         <UPagination
-          v-model="currentPage"
+          v-model:page="currentPage"
           :total="filteredArticles.length"
           :page-count="pageSize"
         />
