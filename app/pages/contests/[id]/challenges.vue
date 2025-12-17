@@ -237,17 +237,17 @@
     <!-- Challenge Modal -->
     <UModal
       v-model:open="isChallengeModalOpen"
-      class="max-w-2xl"
+      class="sm:max-w-2xl"
       @close="closeModal"
     >
       <template #content>
         <UCard
           v-if="selectedChallenge"
           :ui="{
-            root: 'bg-white dark:bg-gray-900',
-            header: 'border-b border-gray-200 dark:border-gray-800',
-            body: 'p-6',
-            footer: 'border-t border-gray-200 dark:border-gray-800'
+            root: 'bg-white dark:bg-gray-900 flex flex-col max-h-[90vh]',
+            header: 'border-b border-gray-200 dark:border-gray-800 flex-shrink-0',
+            body: 'p-6 overflow-y-auto flex-1',
+            footer: 'border-t border-gray-200 dark:border-gray-800 flex-shrink-0'
           }"
         >
           <template #header>
@@ -318,51 +318,23 @@
                 </span>
               </div>
 
-              <!-- Description / Content -->
-              <div class="prose prose-sm dark:prose-invert max-w-none">
-                <p class="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
-                  {{ currentChallengeDetail?.content || selectedChallenge.description }}
-                </p>
-              </div>
-
-              <!-- Hints -->
+              <!-- Description / Content (Markdown) -->
               <div
-                v-if="currentChallengeDetail?.hints && currentChallengeDetail.hints.length > 0"
-                class="space-y-2"
+                v-if="currentChallengeDetail?.content"
+                class="prose prose-sm dark:prose-invert max-w-none"
               >
-                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  提示
-                </h4>
                 <div
-                  v-for="(hint, index) in currentChallengeDetail.hints"
-                  :key="hint.id"
-                  class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
-                >
-                  <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600 dark:text-gray-400">
-                      提示 {{ index + 1 }}
-                    </span>
-                    <UBadge
-                      v-if="!hint.unlocked"
-                      :label="`${hint.cost} 积分`"
-                      color="warning"
-                      variant="soft"
-                      size="xs"
-                    />
-                  </div>
-                  <p
-                    v-if="hint.unlocked && hint.content"
-                    class="mt-1 text-sm text-gray-700 dark:text-gray-300"
-                  >
-                    {{ hint.content }}
-                  </p>
-                  <p
-                    v-else
-                    class="mt-1 text-sm text-gray-400 dark:text-gray-500 italic"
-                  >
-                    需要花费 {{ hint.cost }} 积分解锁
-                  </p>
-                </div>
+                  class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  v-html="renderMarkdown(currentChallengeDetail.content)"
+                />
+              </div>
+              <div
+                v-else
+                class="prose prose-sm dark:prose-invert max-w-none"
+              >
+                <p class="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                  {{ selectedChallenge.description }}
+                </p>
               </div>
 
               <!-- Attachments -->
@@ -381,11 +353,163 @@
                     color="neutral"
                     variant="outline"
                     size="sm"
-                    :to="attachment.url"
-                    target="_blank"
+                    @click="downloadAttachment(attachment)"
                   >
                     {{ attachment.name }}
                   </UButton>
+                </div>
+              </div>
+
+              <!-- Docker Container Section -->
+              <div
+                v-if="currentChallengeDetail?.hasDocker && currentContest?.status === 'active'"
+                class="space-y-2"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  动态容器
+                </h4>
+                <!-- Container Running -->
+                <div
+                  v-if="currentChallengeContainer"
+                  class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-2 text-green-700 dark:text-green-400">
+                      <UIcon
+                        name="i-lucide-server"
+                        class="w-4 h-4"
+                      />
+                      容器运行中
+                    </span>
+                    <span class="text-sm text-green-600 dark:text-green-400">
+                      剩余: {{ formatRemainingTime(currentChallengeContainer.remainingSeconds) }}
+                    </span>
+                  </div>
+                  <!-- Progress Bar (gradient + pulsing animation) -->
+                  <div class="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      class="h-full rounded-full progress-bar-animated"
+                      :class="getProgressPercentage(currentChallengeContainer.remainingSeconds) > 20
+                        ? 'bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500'
+                        : 'bg-gradient-to-r from-red-400 via-orange-500 to-yellow-500'"
+                      :style="{
+                        width: getProgressPercentage(currentChallengeContainer.remainingSeconds) + '%',
+                        animation: `countdown ${currentChallengeContainer.remainingSeconds}s linear forwards, pulse 2s ease-in-out infinite`
+                      }"
+                    />
+                  </div>
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="text-gray-600 dark:text-gray-400">访问地址:</span>
+                    <code class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-900 dark:text-gray-100">
+                      {{ currentChallengeContainer.host }}:{{ currentChallengeContainer.port }}
+                    </code>
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      icon="i-lucide-copy"
+                      @click="copyToClipboard(`${currentChallengeContainer.host}:${currentChallengeContainer.port}`)"
+                    />
+                  </div>
+                  <div class="flex justify-center gap-2">
+                    <UButton
+                      size="sm"
+                      variant="outline"
+                      icon="i-lucide-clock"
+                      :loading="isExtendingContainer"
+                      @click="handleExtendContainer"
+                    >
+                      延长时间
+                    </UButton>
+                    <UButton
+                      size="sm"
+                      variant="outline"
+                      color="error"
+                      icon="i-lucide-square"
+                      :loading="isStoppingContainer"
+                      @click="handleStopContainer"
+                    >
+                      销毁容器
+                    </UButton>
+                  </div>
+                </div>
+                <!-- No Container Running -->
+                <div
+                  v-else
+                  class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center"
+                >
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    此题目支持动态容器，点击启动按钮获取专属环境
+                  </p>
+                  <UButton
+                    size="sm"
+                    icon="i-lucide-play"
+                    :loading="isStartingContainer"
+                    @click="handleStartContainer"
+                  >
+                    启动容器
+                  </UButton>
+                </div>
+              </div>
+
+              <!-- Hints -->
+              <div
+                v-if="currentChallengeDetail?.hints && currentChallengeDetail.hints.length > 0"
+                class="space-y-2"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  提示
+                </h4>
+                <div
+                  v-for="(hint, index) in currentChallengeDetail.hints"
+                  :key="hint.id"
+                  class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">
+                      提示 {{ index + 1 }}
+                      <span
+                        v-if="!hint.unlocked"
+                        class="text-xs text-gray-400 dark:text-gray-500"
+                      >
+                        (-{{ hint.cost }} 分)
+                      </span>
+                    </span>
+                    <UButton
+                      v-if="!hint.unlocked && currentContest?.status === 'active'"
+                      size="xs"
+                      variant="outline"
+                      :loading="isUnlockingHint === hint.id"
+                      @click="handleUnlockHint(hint)"
+                    >
+                      解锁
+                    </UButton>
+                    <UBadge
+                      v-else-if="hint.unlocked"
+                      label="已解锁"
+                      color="success"
+                      variant="subtle"
+                      size="xs"
+                    />
+                    <UBadge
+                      v-else
+                      :label="`${hint.cost} 积分`"
+                      color="warning"
+                      variant="soft"
+                      size="xs"
+                    />
+                  </div>
+                  <p
+                    v-if="hint.unlocked && hint.content"
+                    class="mt-2 text-sm text-gray-700 dark:text-gray-300"
+                  >
+                    {{ hint.content }}
+                  </p>
+                  <p
+                    v-else-if="!hint.unlocked"
+                    class="mt-1 text-sm text-gray-400 dark:text-gray-500 italic"
+                  >
+                    {{ currentContest?.status === 'active' ? '点击解锁查看提示内容' : '需要花费积分解锁' }}
+                  </p>
                 </div>
               </div>
             </template>
@@ -437,10 +561,30 @@
 </template>
 
 <script setup lang="ts">
-import type { CompetitionChallenge, CompetitionChallengeDetail } from '~/composables/useContests'
+import type { CompetitionChallenge, ChallengeHint, ChallengeAttachment } from '~/composables/useContests'
+
+/**
+ * API response wrapper
+ */
+interface ApiResponse<T = unknown> {
+  code: number
+  message: string
+  data: T
+}
+
+/**
+ * Unlock hint response
+ */
+interface UnlockHintResponse {
+  hintId: number
+  content: string
+  cost: number
+  remainingScore: number
+}
 
 const route = useRoute()
 const toast = useToast()
+const { render: renderMarkdownContent } = useMarkdown()
 const {
   currentContest,
   contests,
@@ -455,6 +599,18 @@ const {
   getStatusText,
   getStatusColor
 } = useContests()
+const {
+  containers,
+  startContainer,
+  stopContainer,
+  extendContainer,
+  fetchContainers,
+  formatRemainingTime,
+  startCountdown,
+  stopCountdown,
+  getProgressPercentage
+} = useContainers()
+const { storedUser } = useUser()
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
@@ -466,6 +622,14 @@ const selectedChallenge = ref<CompetitionChallenge | null>(null)
 const flagInput = ref('')
 const isSubmitting = ref(false)
 const isLoadingDetail = ref(false)
+
+// Container state
+const isStartingContainer = ref(false)
+const isStoppingContainer = ref(false)
+const isExtendingContainer = ref(false)
+
+// Hint state
+const isUnlockingHint = ref<number | null>(null)
 
 // Use challenges from currentContest
 const challenges = computed(() => currentContest.value?.challenges || [])
@@ -484,12 +648,38 @@ const filteredChallenges = computed(() => {
   return challenges.value.filter(c => c.category === selectedCategory.value)
 })
 
+// Get container for current challenge
+const currentChallengeContainer = computed(() => {
+  if (!selectedChallenge.value) return null
+  return containers.value.find(c => c.challengeId === selectedChallenge.value!.id)
+})
+
+// Start/stop countdown when container changes
+watch(currentChallengeContainer, (newContainer, oldContainer) => {
+  // Stop countdown for old container
+  if (oldContainer) {
+    stopCountdown(oldContainer.containerId)
+  }
+  // Start countdown for new container
+  if (newContainer && newContainer.remainingSeconds > 0) {
+    startCountdown(newContainer.containerId)
+  }
+}, { immediate: true })
+
+// Cleanup countdown timers on unmount
+onUnmounted(() => {
+  if (currentChallengeContainer.value) {
+    stopCountdown(currentChallengeContainer.value.containerId)
+  }
+})
+
 // Load contest data
 const loadContest = async () => {
   if (contests.value.length === 0) {
     await fetchContests()
   }
   await fetchContest(contestId.value)
+  await fetchContainers()
 }
 
 // Open challenge modal
@@ -557,6 +747,214 @@ const submitFlag = async () => {
   }
 }
 
+/**
+ * Download attachment
+ */
+const downloadAttachment = (attachment: ChallengeAttachment) => {
+  window.open(attachment.url, '_blank')
+}
+
+/**
+ * Copy to clipboard
+ */
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.add({ title: '已复制', color: 'success' })
+  } catch {
+    toast.add({ title: '复制失败', color: 'error' })
+  }
+}
+
+/**
+ * Render markdown content
+ */
+const renderMarkdown = (content: string): string => {
+  return renderMarkdownContent(content)
+}
+
+/**
+ * Start container for challenge
+ */
+const handleStartContainer = async () => {
+  if (!selectedChallenge.value) return
+
+  isStartingContainer.value = true
+
+  const result = await startContainer(selectedChallenge.value.id, contestId.value)
+  isStartingContainer.value = false
+
+  if (result.success && result.data) {
+    // Start countdown timer for the new container
+    startCountdown(result.data.containerId)
+    toast.add({
+      title: '容器已启动',
+      description: `访问地址: ${result.data.host}:${result.data.port}`,
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: '启动失败',
+      description: result.error || '启动容器失败',
+      color: 'error'
+    })
+  }
+}
+
+/**
+ * Stop container for challenge
+ */
+const handleStopContainer = async () => {
+  if (!currentChallengeContainer.value) return
+
+  isStoppingContainer.value = true
+  const containerId = currentChallengeContainer.value.containerId
+
+  // Stop countdown timer before destroying
+  stopCountdown(containerId)
+
+  const result = await stopContainer(containerId)
+  isStoppingContainer.value = false
+
+  if (result.success) {
+    toast.add({
+      title: '容器已销毁',
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: '销毁失败',
+      description: result.error || '销毁容器失败',
+      color: 'error'
+    })
+  }
+}
+
+/**
+ * Extend container lifetime
+ */
+const handleExtendContainer = async () => {
+  if (!currentChallengeContainer.value) return
+
+  isExtendingContainer.value = true
+
+  const result = await extendContainer(currentChallengeContainer.value.containerId)
+  isExtendingContainer.value = false
+
+  if (result.success && result.data) {
+    toast.add({
+      title: '已延长时间',
+      description: `剩余时间: ${formatRemainingTime(result.data.remainingSeconds)}`,
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: '延长失败',
+      description: result.error || '延长时间失败',
+      color: 'error'
+    })
+  }
+}
+
+/**
+ * Unlock hint
+ */
+const handleUnlockHint = async (hint: ChallengeHint) => {
+  const token = storedUser.value?.token
+  if (!token) {
+    toast.add({
+      title: '请先登录',
+      color: 'error'
+    })
+    return
+  }
+
+  if (hint.unlocked && hint.content) {
+    return
+  }
+
+  isUnlockingHint.value = hint.id
+
+  try {
+    const response = await $fetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        hintId: hint.id
+      }
+    })
+
+    if (response.code === 200 && response.data) {
+      const data = response.data
+      // Update the hint in currentChallengeDetail
+      if (currentChallengeDetail.value?.hints) {
+        const hintIndex = currentChallengeDetail.value.hints.findIndex(h => h.id === hint.id)
+        if (hintIndex !== -1) {
+          const targetHint = currentChallengeDetail.value.hints[hintIndex]
+          if (targetHint) {
+            targetHint.unlocked = true
+            targetHint.content = data.content
+          }
+        }
+      }
+
+      if (data.cost > 0) {
+        toast.add({
+          title: '提示已解锁',
+          description: `花费 ${data.cost} 积分，剩余 ${data.remainingScore} 积分`,
+          color: 'success'
+        })
+      } else {
+        toast.add({
+          title: '提示内容',
+          description: data.content,
+          color: 'info'
+        })
+      }
+    } else {
+      toast.add({
+        title: response.message || '解锁提示失败',
+        color: 'error'
+      })
+    }
+  } catch (e: unknown) {
+    const fetchError = e as { data?: ApiResponse; status?: number }
+    if (fetchError.status === 429) {
+      toast.add({
+        title: '请求过于频繁',
+        description: '请稍后再试',
+        color: 'warning'
+      })
+    } else if (fetchError.status === 400) {
+      toast.add({
+        title: fetchError?.data?.message || '积分不足',
+        color: 'error'
+      })
+    } else if (fetchError.status === 401) {
+      toast.add({
+        title: '登录已过期',
+        description: '请重新登录',
+        color: 'error'
+      })
+    } else if (fetchError.status === 404) {
+      toast.add({
+        title: '提示不存在',
+        color: 'error'
+      })
+    } else {
+      toast.add({
+        title: fetchError?.data?.message || '解锁提示失败',
+        color: 'error'
+      })
+    }
+  } finally {
+    isUnlockingHint.value = null
+  }
+}
+
 // Helper functions
 const getCategoryColor = (category: string) => {
   const colors: Record<string, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
@@ -612,5 +1010,26 @@ watch(() => route.params.id, () => {
 
 .challenge-card:hover {
   transform: translateY(-2px);
+}
+
+@keyframes countdown {
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.85;
+    filter: brightness(1.2);
+  }
+}
+
+.progress-bar-animated {
+  box-shadow: 0 0 10px currentColor;
 }
 </style>

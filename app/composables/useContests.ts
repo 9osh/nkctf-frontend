@@ -54,6 +54,7 @@ export interface CompetitionChallengeDetail {
   content: string
   hints: ChallengeHint[] | null
   attachments: ChallengeAttachment[] | null
+  hasDocker: boolean
 }
 
 /**

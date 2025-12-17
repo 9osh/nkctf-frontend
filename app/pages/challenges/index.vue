@@ -244,7 +244,7 @@
           显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, totalItems) }} / {{ totalItems }} 题
         </p>
         <UPagination
-          v-model="currentPage"
+          v-model:page="currentPage"
           :total="totalItems"
           :items-per-page="pageSize"
         />
@@ -416,6 +416,97 @@
                 </div>
               </div>
 
+              <!-- Docker Container Section -->
+              <div
+                v-if="selectedChallenge.hasDocker"
+                class="mt-4"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  动态容器
+                </h4>
+                <!-- Container Running -->
+                <div
+                  v-if="currentChallengeContainer"
+                  class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3"
+                >
+                  <div class="flex items-center justify-between">
+                    <span class="flex items-center gap-2 text-green-700 dark:text-green-400">
+                      <UIcon
+                        name="i-lucide-server"
+                        class="w-4 h-4"
+                      />
+                      容器运行中
+                    </span>
+                    <span class="text-sm text-green-600 dark:text-green-400">
+                      剩余: {{ formatRemainingTime(currentChallengeContainer.remainingSeconds) }}
+                    </span>
+                  </div>
+                  <!-- Progress Bar (gradient + pulsing animation) -->
+                  <div class="h-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      class="h-full rounded-full progress-bar-animated"
+                      :class="getProgressPercentage(currentChallengeContainer.remainingSeconds) > 20
+                        ? 'bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500'
+                        : 'bg-gradient-to-r from-red-400 via-orange-500 to-yellow-500'"
+                      :style="{
+                        width: getProgressPercentage(currentChallengeContainer.remainingSeconds) + '%',
+                        animation: `countdown ${currentChallengeContainer.remainingSeconds}s linear forwards, pulse 2s ease-in-out infinite`
+                      }"
+                    />
+                  </div>
+                  <div class="flex items-center gap-2 text-sm">
+                    <span class="text-gray-600 dark:text-gray-400">访问地址:</span>
+                    <code class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-900 dark:text-gray-100">
+                      {{ currentChallengeContainer.host }}:{{ currentChallengeContainer.port }}
+                    </code>
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      icon="i-lucide-copy"
+                      @click="copyToClipboard(`${currentChallengeContainer.host}:${currentChallengeContainer.port}`)"
+                    />
+                  </div>
+                  <div class="flex justify-center gap-2">
+                    <UButton
+                      size="sm"
+                      variant="outline"
+                      icon="i-lucide-clock"
+                      :loading="isExtendingContainer"
+                      @click="handleExtendContainer"
+                    >
+                      延长时间
+                    </UButton>
+                    <UButton
+                      size="sm"
+                      variant="outline"
+                      color="error"
+                      icon="i-lucide-square"
+                      :loading="isStoppingContainer"
+                      @click="handleStopContainer"
+                    >
+                      销毁容器
+                    </UButton>
+                  </div>
+                </div>
+                <!-- No Container Running -->
+                <div
+                  v-else
+                  class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center"
+                >
+                  <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    此题目支持动态容器，点击启动按钮获取专属环境
+                  </p>
+                  <UButton
+                    size="sm"
+                    icon="i-lucide-play"
+                    :loading="isStartingContainer"
+                    @click="handleStartContainer"
+                  >
+                    启动容器
+                  </UButton>
+                </div>
+              </div>
+
               <!-- Flag Submission -->
               <div class="mt-6">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -554,6 +645,7 @@ interface ChallengeDetail extends ChallengeListItem {
   hints?: Hint[]
   attachments?: Attachment[]
   content?: string
+  hasDocker?: boolean
 }
 
 useSeoMeta({
@@ -583,7 +675,24 @@ const flagInput = ref('')
 const isSubmitting = ref(false)
 
 const { storedUser, initUser } = useUser()
+const { render: renderMarkdownContent } = useMarkdown()
+const {
+  containers,
+  startContainer,
+  stopContainer,
+  extendContainer,
+  fetchContainers,
+  formatRemainingTime,
+  startCountdown,
+  stopCountdown,
+  getProgressPercentage
+} = useContainers()
 const toast = useToast()
+
+// Container state
+const isStartingContainer = ref(false)
+const isStoppingContainer = ref(false)
+const isExtendingContainer = ref(false)
 
 // Filter options
 const categories = [
@@ -674,7 +783,33 @@ const fetchChallenges = async () => {
 onMounted(() => {
   initUser()
   fetchChallenges()
+  fetchContainers()
 })
+
+// Cleanup countdown timers on unmount
+onUnmounted(() => {
+  if (currentChallengeContainer.value) {
+    stopCountdown(currentChallengeContainer.value.containerId)
+  }
+})
+
+// Get container for current challenge
+const currentChallengeContainer = computed(() => {
+  if (!selectedChallenge.value) return null
+  return containers.value.find(c => c.challengeId === selectedChallenge.value!.id)
+})
+
+// Start/stop countdown when container changes
+watch(currentChallengeContainer, (newContainer, oldContainer) => {
+  // Stop countdown for old container
+  if (oldContainer) {
+    stopCountdown(oldContainer.containerId)
+  }
+  // Start countdown for new container
+  if (newContainer && newContainer.remainingSeconds > 0) {
+    startCountdown(newContainer.containerId)
+  }
+}, { immediate: true })
 
 watch([selectedCategory, selectedDifficulty, selectedStatus, sortBy], () => {
   currentPage.value = 1
@@ -1031,47 +1166,105 @@ const unlockHint = async (hint: Hint) => {
 }
 
 /**
- * Simple markdown renderer
- * For production, consider using a library like marked or markdown-it
+ * Start container for challenge
+ */
+const handleStartContainer = async () => {
+  if (!selectedChallenge.value) return
+
+  isStartingContainer.value = true
+
+  const result = await startContainer(selectedChallenge.value.id)
+  isStartingContainer.value = false
+
+  if (result.success && result.data) {
+    // Start countdown timer for the new container
+    startCountdown(result.data.containerId)
+    toast.add({
+      title: '容器已启动',
+      description: `访问地址: ${result.data.host}:${result.data.port}`,
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: '启动失败',
+      description: result.error || '启动容器失败',
+      color: 'error'
+    })
+  }
+}
+
+/**
+ * Stop container for challenge
+ */
+const handleStopContainer = async () => {
+  if (!currentChallengeContainer.value) return
+
+  isStoppingContainer.value = true
+  const containerId = currentChallengeContainer.value.containerId
+
+  // Stop countdown timer before destroying
+  stopCountdown(containerId)
+
+  const result = await stopContainer(containerId)
+  isStoppingContainer.value = false
+
+  if (result.success) {
+    toast.add({
+      title: '容器已销毁',
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: '销毁失败',
+      description: result.error || '销毁容器失败',
+      color: 'error'
+    })
+  }
+}
+
+/**
+ * Extend container lifetime
+ */
+const handleExtendContainer = async () => {
+  if (!currentChallengeContainer.value) return
+
+  isExtendingContainer.value = true
+
+  const result = await extendContainer(currentChallengeContainer.value.containerId)
+  isExtendingContainer.value = false
+
+  if (result.success && result.data) {
+    toast.add({
+      title: '已延长时间',
+      description: `剩余时间: ${formatRemainingTime(result.data.remainingSeconds)}`,
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: '延长失败',
+      description: result.error || '延长时间失败',
+      color: 'error'
+    })
+  }
+}
+
+/**
+ * Copy text to clipboard
+ */
+const copyToClipboard = async (text: string) => {
+  try {
+    await window.navigator.clipboard.writeText(text)
+    toast.add({ title: '已复制', color: 'success' })
+  } catch {
+    toast.add({ title: '复制失败', color: 'error' })
+  }
+}
+
+/**
+ * Render markdown content using useMarkdown composable
  */
 const renderMarkdown = (content: string): string => {
-  // Basic XSS prevention - escape HTML entities first
-  const escapeHtml = (str: string) => {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;')
-  }
-
-  let html = escapeHtml(content)
-
-  // Convert markdown to HTML (basic support)
-  // Headers
-  html = html.replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-3 mb-2">$1</h3>')
-  html = html.replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold mt-4 mb-2">$1</h2>')
-  html = html.replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2">$1</h1>')
-
-  // Code blocks
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded-lg overflow-x-auto my-2"><code>$2</code></pre>')
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 px-1 rounded text-sm">$1</code>')
-
-  // Bold
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-
-  // Italic
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
-
-  // Links (already escaped, so we need to handle carefully)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-500 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
-
-  // Line breaks
-  html = html.replace(/\n/g, '<br>')
-
-  return html
+  return renderMarkdownContent(content)
 }
 </script>
 
@@ -1090,5 +1283,26 @@ const renderMarkdown = (content: string): string => {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+@keyframes countdown {
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 0.85;
+    filter: brightness(1.2);
+  }
+}
+
+.progress-bar-animated {
+  box-shadow: 0 0 10px currentColor;
 }
 </style>
