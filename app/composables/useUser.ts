@@ -148,7 +148,7 @@ export function useUser() {
         user.value = null
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
 
       // Token expired or invalid
       if (fetchError.status === 401) {
@@ -263,7 +263,7 @@ export function useUser() {
         return { success: false, error: response.message || '获取队伍信息失败' }
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 404) {
         // User is not in a team
         if (user.value) {
@@ -541,7 +541,7 @@ export function useUser() {
       }
     } catch (e: unknown) {
       // Handle ofetch error structure
-      const fetchError = e as { data?: ApiResponse; statusCode?: number; status?: number; message?: string }
+      const fetchError = e as { data?: ApiResponse, statusCode?: number, status?: number, message?: string }
       const statusCode = fetchError.statusCode || fetchError.status
       if (statusCode === 404) {
         return { success: false, error: '用户不存在' }

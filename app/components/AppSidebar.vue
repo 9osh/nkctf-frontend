@@ -205,6 +205,7 @@ interface NavItem {
 const route = useRoute()
 const colorMode = useColorMode()
 const { user, isLoading, fetchUser, formattedPoints, formattedRank } = useUser()
+const { hasPermission } = usePermission()
 
 const isCollapsed = ref(false)
 
@@ -213,13 +214,31 @@ onMounted(() => {
   fetchUser()
 })
 
-const navItems: NavItem[] = [
-  { label: '用户中心', to: '/profile', icon: 'i-lucide-user' },
-  { label: '挑战', to: '/challenges', icon: 'i-lucide-flag', badge: '200+' },
-  { label: '学习指南', to: '/learn', icon: 'i-lucide-book-open' },
-  { label: '排行榜', to: '/leaderboard', icon: 'i-lucide-trophy' },
-  { label: '竞赛', to: '/contests', icon: 'i-lucide-swords', badge: 'Live' }
-]
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    { label: '用户中心', to: '/profile', icon: 'i-lucide-user' },
+    { label: '挑战', to: '/challenges', icon: 'i-lucide-flag', badge: '200+' },
+    { label: '学习指南', to: '/learn', icon: 'i-lucide-book-open' }
+  ]
+
+  // Add "我的文章" for users who can create articles
+  if (hasPermission('article:create')) {
+    const myArticlesPath = hasPermission('admin:access') ? '/admin/articles' : '/learn/my'
+    items.push({ label: '我的文章', to: myArticlesPath, icon: 'i-lucide-file-pen' })
+  }
+
+  items.push(
+    { label: '排行榜', to: '/leaderboard', icon: 'i-lucide-trophy' },
+    { label: '竞赛', to: '/contests', icon: 'i-lucide-swords', badge: 'Live' }
+  )
+
+  // Add admin menu for users with admin access
+  if (hasPermission('admin:access')) {
+    items.push({ label: '文章管理', to: '/admin/articles', icon: 'i-lucide-shield-check' })
+  }
+
+  return items
+})
 
 const isActive = (path: string) => {
   return route.path === path || route.path.startsWith(`${path}/`)

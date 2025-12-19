@@ -250,8 +250,7 @@ const handleRegister = async () => {
 
   if (result.success) {
     // Registration successful, page will re-render to show success state
-  }
-  else {
+  } else {
     // TODO: Show error toast
     console.error('报名失败:', result.error)
   }

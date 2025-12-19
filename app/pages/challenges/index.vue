@@ -386,12 +386,16 @@
               <!-- Challenge Content (Markdown) -->
               <div
                 v-if="selectedChallenge.content"
-                class="mt-4 prose prose-sm dark:prose-invert max-w-none"
+                class="mt-4"
               >
-                <div
-                  class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                  v-html="renderMarkdown(selectedChallenge.content)"
-                />
+                <ClientOnly>
+                  <MdPreview
+                    :model-value="selectedChallenge.content"
+                    :theme="previewTheme"
+                    language="zh-CN"
+                    class="bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  />
+                </ClientOnly>
               </div>
 
               <!-- Attachments -->
@@ -588,6 +592,9 @@
 </template>
 
 <script setup lang="ts">
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
+
 /**
  * API response interface
  */
@@ -675,7 +682,11 @@ const flagInput = ref('')
 const isSubmitting = ref(false)
 
 const { storedUser, initUser } = useUser()
-const { render: renderMarkdownContent } = useMarkdown()
+const colorMode = useColorMode()
+
+// Theme for MdPreview
+const previewTheme = computed(() => colorMode.value === 'dark' ? 'dark' : 'light')
+
 const {
   containers,
   startContainer,
@@ -768,7 +779,7 @@ const fetchChallenges = async () => {
       listError.value = response.message || '获取挑战列表失败'
     }
   } catch (e: unknown) {
-    const fetchError = e as { data?: ApiResponse; status?: number }
+    const fetchError = e as { data?: ApiResponse, status?: number }
     if (fetchError.status === 401) {
       listError.value = '登录已过期，请重新登录'
     } else {
@@ -935,7 +946,7 @@ const fetchChallengeDetail = async (challengeId: number): Promise<ChallengeDetai
       return null
     }
   } catch (e: unknown) {
-    const fetchError = e as { data?: ApiResponse; status?: number }
+    const fetchError = e as { data?: ApiResponse, status?: number }
     detailError.value = fetchError?.data?.message || '获取题目详情失败'
     return null
   }
@@ -992,7 +1003,7 @@ const submitFlag = async () => {
     const response = await $fetch<ApiResponse<SubmitFlagResponse>>('/api/challenges/submit', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: {
@@ -1026,7 +1037,7 @@ const submitFlag = async () => {
       })
     }
   } catch (e: unknown) {
-    const fetchError = e as { data?: ApiResponse; status?: number }
+    const fetchError = e as { data?: ApiResponse, status?: number }
     if (fetchError.status === 429) {
       toast.add({
         title: '提交过于频繁',
@@ -1091,7 +1102,7 @@ const unlockHint = async (hint: Hint) => {
     const response = await $fetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: {
@@ -1133,7 +1144,7 @@ const unlockHint = async (hint: Hint) => {
       })
     }
   } catch (e: unknown) {
-    const fetchError = e as { data?: ApiResponse; status?: number }
+    const fetchError = e as { data?: ApiResponse, status?: number }
     if (fetchError.status === 429) {
       toast.add({
         title: '请求过于频繁',
@@ -1258,13 +1269,6 @@ const copyToClipboard = async (text: string) => {
   } catch {
     toast.add({ title: '复制失败', color: 'error' })
   }
-}
-
-/**
- * Render markdown content using useMarkdown composable
- */
-const renderMarkdown = (content: string): string => {
-  return renderMarkdownContent(content)
 }
 </script>
 

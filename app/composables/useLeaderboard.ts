@@ -83,9 +83,8 @@ export function useLeaderboard() {
         entries.value = []
         total.value = 0
       }
-    }
-    catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+    } catch (e: unknown) {
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 401) {
         error.value = '登录已过期，请重新登录'
       } else {
@@ -93,8 +92,7 @@ export function useLeaderboard() {
       }
       entries.value = []
       total.value = 0
-    }
-    finally {
+    } finally {
       isLoading.value = false
     }
   }

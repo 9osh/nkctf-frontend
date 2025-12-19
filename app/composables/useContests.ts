@@ -231,7 +231,7 @@ export function useContests() {
         currentContest.value = null
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 404) {
         error.value = '比赛不存在'
       } else {
@@ -270,7 +270,7 @@ export function useContests() {
         return { success: false, error: response.message || '获取题目详情失败' }
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 403) {
         return { success: false, error: fetchError?.data?.message || '您无权访问此题目' }
       } else if (fetchError.status === 404) {
@@ -347,7 +347,7 @@ export function useContests() {
         return { success: false, error: response.message || '获取排行榜失败' }
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 403) {
         return { success: false, error: fetchError?.data?.message || '您无权查看此排行榜' }
       }
@@ -369,7 +369,7 @@ export function useContests() {
       const response = await $fetch<ApiResponse<FlagSubmitResult>>('/api/competitions/submit', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: { competitionId, challengeId, flag }
@@ -400,7 +400,7 @@ export function useContests() {
         return { success: false, error: response.message || '提交失败' }
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 429) {
         return { success: false, error: '提交过于频繁，请稍后再试' }
       } else if (fetchError.status === 403) {

@@ -233,7 +233,10 @@
               />
               活跃度
             </h3>
-            <ActivityHeatmap :data="user.activityData" :days="365" />
+            <ActivityHeatmap
+              :data="user.activityData"
+              :days="365"
+            />
           </div>
 
           <!-- Solve Radar Chart -->

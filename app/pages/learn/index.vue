@@ -24,19 +24,21 @@
         icon="i-lucide-search"
         size="sm"
         class="w-64 hidden md:block"
+        @keyup.enter="handleSearch"
       />
     </template>
 
     <div class="p-6">
       <!-- Filters -->
       <div class="flex flex-wrap items-center gap-4 mb-6">
-        <!-- Category Filter -->
+        <!-- Tag Filter -->
         <USelectMenu
-          v-model="selectedCategory"
-          :items="categoryOptions"
+          v-model="selectedTagId"
+          :items="tagOptions"
           value-key="value"
-          placeholder="所有分类"
+          placeholder="所有标签"
           class="w-40"
+          @update:model-value="handleFilterChange"
         />
 
         <!-- Sort -->
@@ -45,6 +47,7 @@
           :items="sortOptions"
           value-key="value"
           class="w-40 ml-auto"
+          @update:model-value="handleFilterChange"
         />
       </div>
 
@@ -79,7 +82,7 @@
         class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
       >
         <NuxtLink
-          v-for="article in paginatedArticles"
+          v-for="article in articles"
           :key="article.id"
           :to="`/learn/${article.id}`"
           class="article-card group"
@@ -90,50 +93,57 @@
               body: 'p-5'
             }"
           >
-            <!-- Category Badge -->
-            <div class="flex items-center gap-2 mb-3">
-              <div
-                class="w-8 h-8 rounded-lg flex items-center justify-center"
-                :class="getCategoryBgClass(article.category)"
-              >
-                <UIcon
-                  :name="getCategoryIcon(article.category)"
-                  class="w-4 h-4"
-                  :class="getCategoryIconClass(article.category)"
-                />
-              </div>
+            <!-- Tags -->
+            <div class="flex items-center gap-2 mb-3 flex-wrap">
               <UBadge
-                :label="article.category"
-                :color="getCategoryColor(article.category)"
+                v-for="tag in article.tags.slice(0, 2)"
+                :key="tag.id"
+                :label="tag.name"
+                :style="{ backgroundColor: tag.color + '20', color: tag.color }"
+                variant="subtle"
+                size="xs"
+              />
+              <UBadge
+                v-if="article.tags.length > 2"
+                :label="`+${article.tags.length - 2}`"
+                color="neutral"
                 variant="subtle"
                 size="xs"
               />
             </div>
 
             <!-- Title -->
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors line-clamp-2">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors line-clamp-2">
               {{ article.title }}
             </h3>
+
+            <!-- Summary -->
+            <p
+              v-if="article.summary"
+              class="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2"
+            >
+              {{ article.summary }}
+            </p>
 
             <!-- Footer -->
             <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
               <div class="flex items-center gap-3">
                 <span class="flex items-center gap-1">
                   <UIcon
-                    name="i-lucide-clock"
+                    name="i-lucide-user"
                     class="w-4 h-4"
                   />
-                  {{ article.readTime }} 分钟
+                  {{ article.author.nickname }}
                 </span>
                 <span class="flex items-center gap-1">
                   <UIcon
                     name="i-lucide-eye"
                     class="w-4 h-4"
                   />
-                  {{ article.views }}
+                  {{ article.viewCount }}
                 </span>
               </div>
-              <span>{{ article.publishedAt }}</span>
+              <span>{{ formatDate(article.publishTime) }}</span>
             </div>
           </UCard>
         </NuxtLink>
@@ -141,7 +151,7 @@
 
       <!-- Empty State -->
       <div
-        v-if="!isLoading && filteredArticles.length === 0"
+        v-if="!isLoading && articles.length === 0"
         class="flex flex-col items-center justify-center py-16"
       >
         <UIcon
@@ -158,16 +168,17 @@
 
       <!-- Pagination -->
       <div
-        v-if="filteredArticles.length > 0"
+        v-if="articles.length > 0"
         class="flex items-center justify-between mt-8"
       >
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          显示 {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, filteredArticles.length) }} / {{ filteredArticles.length }} 篇
+          显示 {{ (pagination.page - 1) * pagination.size + 1 }} - {{ Math.min(pagination.page * pagination.size, pagination.total) }} / {{ pagination.total }} 篇
         </p>
         <UPagination
           v-model:page="currentPage"
-          :total="filteredArticles.length"
-          :page-count="pageSize"
+          :total="pagination.total"
+          :page-count="pagination.size"
+          @update:page="handlePageChange"
         />
       </div>
     </div>
@@ -175,135 +186,103 @@
 </template>
 
 <script setup lang="ts">
+import type { Tag } from '~/composables/useLearn'
+
 useSeoMeta({
   title: '学习指南 - NKCTF',
   description: '浏览 CTF 学习资源，从入门到进阶的安全技术文章'
 })
 
-const { articles, isLoading, fetchArticles, totalArticles } = useLearn()
+const {
+  articles,
+  tags,
+  pagination,
+  isLoading,
+  fetchTags,
+  fetchPublishedArticles,
+  totalArticles
+} = useLearn()
 
 // Filters
 const searchQuery = ref('')
-const selectedCategory = ref<string | undefined>(undefined)
-const sortBy = ref('newest')
+const selectedTagId = ref<number | undefined>(undefined)
+const sortBy = ref<'newest' | 'most_views'>('newest')
 
 // Pagination
 const currentPage = ref(1)
-const pageSize = 12
 
-// Filter options
-const categoryOptions = computed(() => [
-  { label: '所有分类', value: undefined },
-  { label: 'Web', value: 'Web' },
-  { label: 'Pwn', value: 'Pwn' },
-  { label: 'Crypto', value: 'Crypto' },
-  { label: 'Reverse', value: 'Reverse' },
-  { label: 'Misc', value: 'Misc' },
-  { label: 'Blockchain', value: 'Blockchain' }
-])
+// Tag options computed from fetched tags
+const tagOptions = computed(() => {
+  const options: Array<{ label: string, value: number | undefined }> = [
+    { label: '所有标签', value: undefined }
+  ]
+  tags.value.forEach((tag: Tag) => {
+    options.push({
+      label: `${tag.name} (${tag.articleCount || 0})`,
+      value: tag.id
+    })
+  })
+  return options
+})
 
 const sortOptions = [
-  { label: '最新发布', value: 'newest' },
-  { label: '最多阅读', value: 'most-views' },
-  { label: '阅读时间', value: 'read-time' }
+  { label: '最新发布', value: 'newest' as const },
+  { label: '最多阅读', value: 'most_views' as const }
 ]
 
-// Computed
-const filteredArticles = computed(() => {
-  let result = [...articles.value]
+/**
+ * Format date string to display format
+ */
+const formatDate = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
 
-  // Search filter
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter(a =>
-      a.title.toLowerCase().includes(query)
-    )
-  }
+/**
+ * Load articles with current filters
+ */
+const loadArticles = async () => {
+  await fetchPublishedArticles({
+    tagId: selectedTagId.value,
+    keyword: searchQuery.value || undefined,
+    sortBy: sortBy.value,
+    page: currentPage.value
+  })
+}
 
-  // Category filter
-  if (selectedCategory.value) {
-    result = result.filter(a => a.category === selectedCategory.value)
-  }
-
-  // Sort
-  switch (sortBy.value) {
-    case 'newest':
-      result.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-      break
-    case 'most-views':
-      result.sort((a, b) => b.views - a.views)
-      break
-    case 'read-time':
-      result.sort((a, b) => a.readTime - b.readTime)
-      break
-  }
-
-  return result
-})
-
-const paginatedArticles = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  const end = start + pageSize
-  return filteredArticles.value.slice(start, end)
-})
-
-// Reset page when filters change
-watch([searchQuery, selectedCategory, sortBy], () => {
+/**
+ * Handle search input
+ */
+const handleSearch = () => {
   currentPage.value = 1
-})
-
-// Helper functions
-const getCategoryIcon = (category: string) => {
-  const icons: Record<string, string> = {
-    Web: 'i-lucide-globe',
-    Pwn: 'i-lucide-bug',
-    Crypto: 'i-lucide-key',
-    Reverse: 'i-lucide-cpu',
-    Misc: 'i-lucide-puzzle',
-    Blockchain: 'i-lucide-link'
-  }
-  return icons[category] || 'i-lucide-book-open'
+  loadArticles()
 }
 
-const getCategoryColor = (category: string) => {
-  const colors: Record<string, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
-    Web: 'primary',
-    Pwn: 'error',
-    Crypto: 'warning',
-    Reverse: 'info',
-    Misc: 'success',
-    Blockchain: 'secondary'
-  }
-  return colors[category] || 'neutral'
+/**
+ * Handle filter change
+ */
+const handleFilterChange = () => {
+  currentPage.value = 1
+  loadArticles()
 }
 
-const getCategoryBgClass = (category: string) => {
-  const classes: Record<string, string> = {
-    Web: 'bg-primary-100 dark:bg-primary-900/30',
-    Pwn: 'bg-red-100 dark:bg-red-900/30',
-    Crypto: 'bg-yellow-100 dark:bg-yellow-900/30',
-    Reverse: 'bg-blue-100 dark:bg-blue-900/30',
-    Misc: 'bg-green-100 dark:bg-green-900/30',
-    Blockchain: 'bg-purple-100 dark:bg-purple-900/30'
-  }
-  return classes[category] || 'bg-gray-100 dark:bg-gray-800'
+/**
+ * Handle page change
+ */
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  loadArticles()
 }
 
-const getCategoryIconClass = (category: string) => {
-  const classes: Record<string, string> = {
-    Web: 'text-primary-600 dark:text-primary-400',
-    Pwn: 'text-red-600 dark:text-red-400',
-    Crypto: 'text-yellow-600 dark:text-yellow-400',
-    Reverse: 'text-blue-600 dark:text-blue-400',
-    Misc: 'text-green-600 dark:text-green-400',
-    Blockchain: 'text-purple-600 dark:text-purple-400'
-  }
-  return classes[category] || 'text-gray-600 dark:text-gray-400'
-}
-
-// Fetch articles on mount
-onMounted(() => {
-  fetchArticles()
+// Fetch tags and articles on mount
+onMounted(async () => {
+  await fetchTags()
+  await loadArticles()
 })
 </script>
 

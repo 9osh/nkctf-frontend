@@ -107,7 +107,7 @@ export function useContainers() {
     isLoading.value = true
 
     try {
-      const body: { challengeId: number; competitionId?: number } = { challengeId }
+      const body: { challengeId: number, competitionId?: number } = { challengeId }
       if (competitionId) {
         body.competitionId = competitionId
       }
@@ -115,7 +115,7 @@ export function useContainers() {
       const response = await $fetch<ApiResponse<ContainerStartResponse>>('/api/containers/start', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body
@@ -130,7 +130,7 @@ export function useContainers() {
         return { success: false, error: response.message || '启动容器失败' }
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 429) {
         return { success: false, error: '启动容器过于频繁，请稍后再试' }
       } else if (fetchError.status === 400) {
@@ -160,7 +160,7 @@ export function useContainers() {
       const response = await $fetch<ApiResponse>('/api/containers/stop', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: { containerId }
@@ -174,7 +174,7 @@ export function useContainers() {
         return { success: false, error: response.message || '销毁容器失败' }
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 403) {
         return { success: false, error: '无权操作此容器' }
       } else if (fetchError.status === 404) {
@@ -198,7 +198,7 @@ export function useContainers() {
       const response = await $fetch<ApiResponse<Container>>('/api/containers/extend', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: { containerId }
@@ -215,7 +215,7 @@ export function useContainers() {
         return { success: false, error: response.message || '延长时间失败' }
       }
     } catch (e: unknown) {
-      const fetchError = e as { data?: ApiResponse; status?: number }
+      const fetchError = e as { data?: ApiResponse, status?: number }
       if (fetchError.status === 400) {
         return { success: false, error: fetchError?.data?.message || '延时次数已达上限' }
       } else if (fetchError.status === 403) {

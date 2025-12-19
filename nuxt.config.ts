@@ -15,13 +15,15 @@ export default defineNuxtConfig({
   // NUXT_PUBLIC_API_BASE will override runtimeConfig.public.apiBase
   runtimeConfig: {
     public: {
-      apiBase: 'http://localhost:8080'
+      apiBase: 'http://localhost:8080/api'
     }
   },
 
   routeRules: {
     '/': { prerender: true }
   },
+
+  compatibilityDate: '2025-01-15',
 
   // Proxy API requests to backend server
   nitro: {
@@ -32,8 +34,6 @@ export default defineNuxtConfig({
       }
     }
   },
-
-  compatibilityDate: '2025-01-15',
 
   eslint: {
     config: {

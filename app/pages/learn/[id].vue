@@ -30,21 +30,14 @@
             name="i-lucide-user"
             class="w-4 h-4"
           />
-          {{ currentArticle.author }}
-        </span>
-        <span class="flex items-center gap-1">
-          <UIcon
-            name="i-lucide-clock"
-            class="w-4 h-4"
-          />
-          {{ currentArticle.readTime }} 分钟阅读
+          {{ currentArticle.author.nickname }}
         </span>
         <span class="flex items-center gap-1">
           <UIcon
             name="i-lucide-eye"
             class="w-4 h-4"
           />
-          {{ currentArticle.views }}
+          {{ currentArticle.viewCount }}
         </span>
       </div>
     </template>
@@ -96,49 +89,79 @@
       >
         <!-- Article Header -->
         <header class="mb-8 pb-6 border-b border-gray-200 dark:border-gray-800">
-          <div class="flex items-center gap-2 mb-4">
+          <!-- Tags -->
+          <div class="flex items-center gap-2 mb-4 flex-wrap">
             <UBadge
-              :label="currentArticle.category"
-              :color="getCategoryColor(currentArticle.category)"
+              v-for="tag in currentArticle.tags"
+              :key="tag.id"
+              :label="tag.name"
+              :style="{ backgroundColor: tag.color + '20', color: tag.color }"
               variant="subtle"
             />
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ currentArticle.publishedAt }}
+            <span class="text-sm text-gray-500 dark:text-gray-400 ml-2">
+              {{ formatDate(currentArticle.publishTime) }}
             </span>
           </div>
+
           <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
             {{ currentArticle.title }}
           </h1>
+
+          <!-- Summary -->
+          <p
+            v-if="currentArticle.summary"
+            class="text-lg text-gray-600 dark:text-gray-400 mb-4"
+          >
+            {{ currentArticle.summary }}
+          </p>
+
           <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-            <span class="flex items-center gap-1">
+            <!-- Author with avatar -->
+            <span class="flex items-center gap-2">
+              <UAvatar
+                v-if="currentArticle.author.avatar"
+                :src="currentArticle.author.avatar"
+                :alt="currentArticle.author.nickname"
+                size="xs"
+              />
               <UIcon
+                v-else
                 name="i-lucide-user"
                 class="w-4 h-4"
               />
-              {{ currentArticle.author }}
-            </span>
-            <span class="flex items-center gap-1">
-              <UIcon
-                name="i-lucide-clock"
-                class="w-4 h-4"
-              />
-              {{ currentArticle.readTime }} 分钟阅读
+              {{ currentArticle.author.nickname }}
             </span>
             <span class="flex items-center gap-1">
               <UIcon
                 name="i-lucide-eye"
                 class="w-4 h-4"
               />
-              {{ currentArticle.views }} 次阅读
+              {{ currentArticle.viewCount }} 次阅读
+            </span>
+            <span class="flex items-center gap-1">
+              <UIcon
+                name="i-lucide-calendar"
+                class="w-4 h-4"
+              />
+              {{ formatDate(currentArticle.createTime) }}
             </span>
           </div>
         </header>
 
         <!-- Markdown Content -->
-        <div
-          class="prose prose-gray dark:prose-invert max-w-none"
-          v-html="renderedContent"
-        />
+        <ClientOnly>
+          <MdPreview
+            v-if="currentArticle.content"
+            :model-value="currentArticle.content"
+            :theme="previewTheme"
+            language="zh-CN"
+          />
+          <template #fallback>
+            <div class="py-8 text-center text-gray-500 dark:text-gray-400">
+              加载中...
+            </div>
+          </template>
+        </ClientOnly>
 
         <!-- Footer Navigation -->
         <footer class="mt-12 pt-6 border-t border-gray-200 dark:border-gray-800">
@@ -156,6 +179,7 @@
                 color="neutral"
                 variant="ghost"
                 aria-label="分享"
+                @click="shareArticle"
               />
               <UButton
                 icon="i-lucide-bookmark"
@@ -172,47 +196,66 @@
 </template>
 
 <script setup lang="ts">
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
+
 const route = useRoute()
 const router = useRouter()
-const { currentArticle, isLoading, error, fetchArticle, fetchArticles, articles } = useLearn()
-const { render } = useMarkdown()
+const colorMode = useColorMode()
+const { currentArticle, isLoading, error, fetchPublishedArticle, clearCurrentArticle } = useLearn()
 
 // Get article ID from route
 const articleId = computed(() => Number(route.params.id))
 
-// Rendered markdown content
-const renderedContent = computed(() => {
-  if (!currentArticle.value?.content) return ''
-  return render(currentArticle.value.content)
-})
+// Theme for MdPreview
+const previewTheme = computed(() => colorMode.value === 'dark' ? 'dark' : 'light')
 
-// Load article data
+/**
+ * Format date string to display format
+ */
+const formatDate = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
+
+/**
+ * Load article data
+ */
 const loadArticle = async () => {
-  // Ensure articles list is loaded first (for article metadata)
-  if (articles.value.length === 0) {
-    await fetchArticles()
+  await fetchPublishedArticle(articleId.value)
+}
+
+/**
+ * Share article
+ */
+const shareArticle = async () => {
+  if (navigator.share && currentArticle.value) {
+    try {
+      await navigator.share({
+        title: currentArticle.value.title,
+        text: currentArticle.value.summary || '',
+        url: window.location.href
+      })
+    } catch {
+      // User cancelled or share failed, copy to clipboard instead
+      await navigator.clipboard.writeText(window.location.href)
+    }
+  } else {
+    // Fallback: copy to clipboard
+    await navigator.clipboard.writeText(window.location.href)
   }
-  await fetchArticle(articleId.value)
 }
 
 // SEO
 useSeoMeta({
   title: () => currentArticle.value ? `${currentArticle.value.title} - NKCTF` : '加载中... - NKCTF',
-  description: () => currentArticle.value ? `阅读 ${currentArticle.value.title}` : ''
+  description: () => currentArticle.value?.summary || ''
 })
-
-// Helper functions
-const getCategoryColor = (category: string) => {
-  const colors: Record<string, 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'> = {
-    Web: 'primary',
-    Pwn: 'error',
-    Crypto: 'warning',
-    Reverse: 'info',
-    Misc: 'success',
-    Blockchain: 'secondary'
-  }
-  return colors[category] || 'neutral'
-}
 
 // Fetch article on mount
 onMounted(() => {
@@ -223,177 +266,9 @@ onMounted(() => {
 watch(() => route.params.id, () => {
   loadArticle()
 })
+
+// Clean up on unmount
+onUnmounted(() => {
+  clearCurrentArticle()
+})
 </script>
-
-<style scoped>
-/* Prose styles for markdown content */
-.prose {
-  --tw-prose-body: var(--color-gray-700);
-  --tw-prose-headings: var(--color-gray-900);
-  --tw-prose-links: var(--color-primary-600);
-  --tw-prose-code: var(--color-primary-600);
-  --tw-prose-pre-bg: var(--color-gray-100);
-  line-height: 1.75;
-}
-
-.dark .prose {
-  --tw-prose-body: var(--color-gray-300);
-  --tw-prose-headings: var(--color-white);
-  --tw-prose-links: var(--color-primary-400);
-  --tw-prose-code: var(--color-primary-400);
-  --tw-prose-pre-bg: var(--color-gray-800);
-}
-
-.prose :deep(h1) {
-  font-size: 2rem;
-  font-weight: 700;
-  margin-top: 2rem;
-  margin-bottom: 1rem;
-  color: var(--tw-prose-headings);
-}
-
-.prose :deep(h2) {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-top: 1.75rem;
-  margin-bottom: 0.75rem;
-  color: var(--tw-prose-headings);
-  border-bottom: 1px solid var(--color-gray-200);
-  padding-bottom: 0.5rem;
-}
-
-.dark .prose :deep(h2) {
-  border-bottom-color: var(--color-gray-700);
-}
-
-.prose :deep(h3) {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
-  color: var(--tw-prose-headings);
-}
-
-.prose :deep(p) {
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-  color: var(--tw-prose-body);
-}
-
-.prose :deep(a) {
-  color: var(--tw-prose-links);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.prose :deep(a:hover) {
-  opacity: 0.8;
-}
-
-.prose :deep(code) {
-  color: var(--tw-prose-code);
-  background-color: var(--color-gray-100);
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  font-size: 0.875em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.dark .prose :deep(code) {
-  background-color: var(--color-gray-800);
-}
-
-.prose :deep(pre) {
-  background-color: var(--tw-prose-pre-bg);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  overflow-x: auto;
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-}
-
-.prose :deep(pre code) {
-  background-color: transparent;
-  padding: 0;
-  color: inherit;
-  font-size: 0.875rem;
-  line-height: 1.7;
-}
-
-.prose :deep(ul),
-.prose :deep(ol) {
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-  padding-left: 1.5rem;
-}
-
-.prose :deep(li) {
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
-  color: var(--tw-prose-body);
-}
-
-.prose :deep(ul) {
-  list-style-type: disc;
-}
-
-.prose :deep(ol) {
-  list-style-type: decimal;
-}
-
-.prose :deep(blockquote) {
-  border-left: 4px solid var(--color-primary-500);
-  padding-left: 1rem;
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-  font-style: italic;
-  color: var(--color-gray-600);
-}
-
-.dark .prose :deep(blockquote) {
-  color: var(--color-gray-400);
-}
-
-.prose :deep(hr) {
-  border-color: var(--color-gray-200);
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-}
-
-.dark .prose :deep(hr) {
-  border-color: var(--color-gray-700);
-}
-
-.prose :deep(strong) {
-  font-weight: 600;
-  color: var(--tw-prose-headings);
-}
-
-.prose :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-  margin-bottom: 1rem;
-}
-
-.prose :deep(th),
-.prose :deep(td) {
-  border: 1px solid var(--color-gray-200);
-  padding: 0.5rem 1rem;
-  text-align: left;
-}
-
-.dark .prose :deep(th),
-.dark .prose :deep(td) {
-  border-color: var(--color-gray-700);
-}
-
-.prose :deep(th) {
-  background-color: var(--color-gray-50);
-  font-weight: 600;
-}
-
-.dark .prose :deep(th) {
-  background-color: var(--color-gray-800);
-}
-</style>

@@ -321,12 +321,16 @@
               <!-- Description / Content (Markdown) -->
               <div
                 v-if="currentChallengeDetail?.content"
-                class="prose prose-sm dark:prose-invert max-w-none"
+                class="mt-2"
               >
-                <div
-                  class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                  v-html="renderMarkdown(currentChallengeDetail.content)"
-                />
+                <ClientOnly>
+                  <MdPreview
+                    :model-value="currentChallengeDetail.content"
+                    :theme="previewTheme"
+                    language="zh-CN"
+                    class="bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  />
+                </ClientOnly>
               </div>
               <div
                 v-else
@@ -561,6 +565,8 @@
 </template>
 
 <script setup lang="ts">
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
 import type { CompetitionChallenge, ChallengeHint, ChallengeAttachment } from '~/composables/useContests'
 
 /**
@@ -584,7 +590,11 @@ interface UnlockHintResponse {
 
 const route = useRoute()
 const toast = useToast()
-const { render: renderMarkdownContent } = useMarkdown()
+const colorMode = useColorMode()
+
+// Theme for MdPreview
+const previewTheme = computed(() => colorMode.value === 'dark' ? 'dark' : 'light')
+
 const {
   currentContest,
   contests,
@@ -767,13 +777,6 @@ const copyToClipboard = async (text: string) => {
 }
 
 /**
- * Render markdown content
- */
-const renderMarkdown = (content: string): string => {
-  return renderMarkdownContent(content)
-}
-
-/**
  * Start container for challenge
  */
 const handleStartContainer = async () => {
@@ -879,7 +882,7 @@ const handleUnlockHint = async (hint: ChallengeHint) => {
     const response = await $fetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: {
@@ -921,7 +924,7 @@ const handleUnlockHint = async (hint: ChallengeHint) => {
       })
     }
   } catch (e: unknown) {
-    const fetchError = e as { data?: ApiResponse; status?: number }
+    const fetchError = e as { data?: ApiResponse, status?: number }
     if (fetchError.status === 429) {
       toast.add({
         title: '请求过于频繁',

@@ -26,7 +26,10 @@
     <div class="heatmap-scroll overflow-x-auto pb-2">
       <div class="inline-block min-w-fit">
         <!-- Month Labels -->
-        <div class="flex mb-1" :style="{ marginLeft: `${dayLabelWidth}px` }">
+        <div
+          class="flex mb-1"
+          :style="{ marginLeft: `${dayLabelWidth}px` }"
+        >
           <div
             v-for="(month, index) in monthLabels"
             :key="index"
@@ -51,7 +54,10 @@
           </div>
 
           <!-- Calendar Grid -->
-          <div class="flex" :style="{ gap: `${gap}px` }">
+          <div
+            class="flex"
+            :style="{ gap: `${gap}px` }"
+          >
             <div
               v-for="(week, weekIndex) in weeks"
               :key="weekIndex"
@@ -199,8 +205,7 @@ const longestStreak = computed(() => {
     if (day.count > 0) {
       streak++
       maxStreak = Math.max(maxStreak, streak)
-    }
-    else {
+    } else {
       streak = 0
     }
   }
@@ -216,8 +221,7 @@ const currentStreak = computed(() => {
   for (const day of reversedData) {
     if (day.count > 0) {
       streak++
-    }
-    else {
+    } else {
       break
     }
   }
@@ -280,8 +284,7 @@ const monthLabels = computed(() => {
         }
         currentMonth = month
         weekCount = 1
-      }
-      else {
+      } else {
         weekCount++
       }
     }
