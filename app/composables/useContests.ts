@@ -150,7 +150,8 @@ export function useContests() {
   const isLoading = useState('contests-loading', () => false)
   const error = useState<string | null>('contests-error', () => null)
 
-  const { storedUser } = useUser()
+  const { isAuthenticated } = useAuth()
+  const authFetch = useAuthFetch()
 
   /**
    * Map API competition to frontend Contest format
@@ -176,15 +177,7 @@ export function useContests() {
     error.value = null
 
     try {
-      const headers: Record<string, string> = {}
-      const token = storedUser.value?.token
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
-
-      const response = await $fetch<ApiResponse<ApiCompetition[]>>('/api/competitions', {
-        headers
-      })
+      const response = await authFetch<ApiResponse<ApiCompetition[]>>('/api/competitions')
 
       if (response.code === 200 && response.data) {
         contests.value = response.data.map(mapApiCompetitionToContest)
@@ -210,15 +203,7 @@ export function useContests() {
     error.value = null
 
     try {
-      const headers: Record<string, string> = {}
-      const token = storedUser.value?.token
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
-
-      const response = await $fetch<ApiResponse<ApiCompetitionDetail>>(`/api/competitions/${id}`, {
-        headers
-      })
+      const response = await authFetch<ApiResponse<ApiCompetitionDetail>>(`/api/competitions/${id}`)
 
       if (response.code === 200 && response.data) {
         const apiData = response.data
@@ -248,19 +233,13 @@ export function useContests() {
    * GET /api/competitions/{competitionId}/challenges/{challengeId}
    */
   const fetchCompetitionChallengeDetail = async (competitionId: number, challengeId: number) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<CompetitionChallengeDetail>>(
-        `/api/competitions/${competitionId}/challenges/${challengeId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+      const response = await authFetch<ApiResponse<CompetitionChallengeDetail>>(
+        `/api/competitions/${competitionId}/challenges/${challengeId}`
       )
 
       if (response.code === 200 && response.data) {
@@ -285,17 +264,13 @@ export function useContests() {
    * POST /api/competitions/{competitionId}/register
    */
   const registerContest = async (id: number) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse>(`/api/competitions/${id}/register`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await authFetch<ApiResponse>(`/api/competitions/${id}/register`, {
+        method: 'POST'
       })
 
       if (response.code === 200) {
@@ -325,19 +300,13 @@ export function useContests() {
    * GET /api/competitions/{competitionId}/leaderboard
    */
   const fetchCompetitionLeaderboard = async (competitionId: number) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<CompetitionLeaderboard>>(
-        `/api/competitions/${competitionId}/leaderboard`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+      const response = await authFetch<ApiResponse<CompetitionLeaderboard>>(
+        `/api/competitions/${competitionId}/leaderboard`
       )
 
       if (response.code === 200 && response.data) {
@@ -360,18 +329,13 @@ export function useContests() {
    * POST /api/competitions/submit
    */
   const submitCompetitionFlag = async (competitionId: number, challengeId: number, flag: string) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<FlagSubmitResult>>('/api/competitions/submit', {
+      const response = await authFetch<ApiResponse<FlagSubmitResult>>('/api/competitions/submit', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: { competitionId, challengeId, flag }
       })
 

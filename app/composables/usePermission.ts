@@ -23,6 +23,9 @@ export type Permission
     | 'article:publish' // Publish articles directly (ADMIN)
     | 'article:delete:any' // Delete any article (ADMIN)
     | 'tag:manage' // Manage tags (CRUD) (ADMIN)
+    | 'user:manage' // Manage users (CRUD) (ADMIN)
+    | 'challenge:manage' // Manage challenges (CRUD) (ADMIN)
+    | 'competition:manage' // Manage competitions (CRUD) (ADMIN)
     | 'admin:access' // Access admin panel (ADMIN)
 
 /**
@@ -38,6 +41,9 @@ const PERMISSION_MATRIX: Record<Permission, UserRole[]> = {
   'article:publish': ['ADMIN'],
   'article:delete:any': ['ADMIN'],
   'tag:manage': ['ADMIN'],
+  'user:manage': ['ADMIN'],
+  'challenge:manage': ['ADMIN'],
+  'competition:manage': ['ADMIN'],
   'admin:access': ['ADMIN']
 }
 

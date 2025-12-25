@@ -1,0 +1,315 @@
+/**
+ * Auth plugin with centralized fetch interceptor
+ * Automatically handles authentication headers and token refresh
+ * Includes background timer to refresh tokens before expiration
+ */
+
+import type { FetchContext } from 'ofetch'
+
+// Type for fetch options
+type FetchOptions = Parameters<typeof $fetch>[1]
+
+// Request queue for handling concurrent requests during token refresh
+interface QueuedRequest {
+  resolve: (value: unknown) => void
+  reject: (error: unknown) => void
+  request: string
+  options: FetchOptions
+}
+
+/**
+ * Safely add authorization header to fetch options
+ */
+function addAuthHeader(options: FetchContext['options'], token: string): void {
+  // Convert existing headers to a plain object
+  const existingHeaders: Record<string, string> = {}
+
+  if (options.headers) {
+    if (options.headers instanceof Headers) {
+      options.headers.forEach((value: string, key: string) => {
+        existingHeaders[key] = value
+      })
+    } else if (Array.isArray(options.headers)) {
+      (options.headers as [string, string][]).forEach(([key, value]: [string, string]) => {
+        existingHeaders[key] = value
+      })
+    } else {
+      Object.assign(existingHeaders, options.headers)
+    }
+  }
+
+  // Add Authorization header
+  existingHeaders.Authorization = `Bearer ${token}`
+
+  // Assign back to options as HeadersInit (plain object is valid HeadersInit)
+  ;(options as unknown as { headers: Record<string, string> }).headers = existingHeaders
+}
+
+export default defineNuxtPlugin(() => {
+  const { getAccessToken, getRefreshToken, getTokenExpiresAt, isTokenExpiringSoon, refreshTokens, clearTokens } = useAuth()
+  const config = useRuntimeConfig()
+  const apiBase = config.public.apiBase as string || '/api'
+
+  // Queue for requests waiting during token refresh
+  let isRefreshing = false
+  let requestQueue: QueuedRequest[] = []
+
+  // Timer for automatic token refresh
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Buffer time before token expiration to trigger refresh (2 minutes)
+   * This ensures we refresh well before the token actually expires
+   */
+  const REFRESH_BUFFER_MS = 2 * 60 * 1000
+
+  /**
+   * Minimum interval between refresh attempts (30 seconds)
+   * Prevents rapid refresh loops if something goes wrong
+   */
+  const MIN_REFRESH_INTERVAL_MS = 30 * 1000
+
+  /**
+   * Schedule automatic token refresh before expiration
+   */
+  const scheduleTokenRefresh = () => {
+    // Clear existing timer
+    if (refreshTimer) {
+      clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
+
+    const expiresAt = getTokenExpiresAt()
+    const refreshToken = getRefreshToken()
+
+    // Don't schedule if no token or no refresh token
+    if (!expiresAt || !refreshToken) {
+      return
+    }
+
+    // Calculate when to refresh (2 minutes before expiration)
+    const now = Date.now()
+    const refreshAt = expiresAt - REFRESH_BUFFER_MS
+    let delay = refreshAt - now
+
+    // If token is already expiring soon, refresh immediately (but with minimum delay)
+    if (delay < 0) {
+      delay = MIN_REFRESH_INTERVAL_MS
+    }
+
+    // Safety cap: don't set timers longer than 24 hours
+    const MAX_DELAY_MS = 24 * 60 * 60 * 1000
+    if (delay > MAX_DELAY_MS) {
+      delay = MAX_DELAY_MS
+    }
+
+    refreshTimer = setTimeout(async () => {
+      if (!isRefreshing && getRefreshToken()) {
+        isRefreshing = true
+        try {
+          const success = await refreshTokens()
+          if (success) {
+            // Reschedule for next refresh
+            scheduleTokenRefresh()
+          }
+          // If refresh failed, clearTokens() is called in refreshTokens()
+          // and the user will need to log in again
+        } finally {
+          isRefreshing = false
+        }
+      }
+    }, delay)
+  }
+
+  // Start the refresh timer if user is already logged in
+  if (getAccessToken() && getRefreshToken()) {
+    scheduleTokenRefresh()
+  }
+
+  // Watch for auth state changes to manage timer
+  // This handles login/logout events
+  const { authUser } = useAuth()
+  watch(authUser, (newUser) => {
+    if (newUser && getRefreshToken()) {
+      // User logged in, start refresh timer
+      scheduleTokenRefresh()
+    } else {
+      // User logged out, clear timer
+      if (refreshTimer) {
+        clearTimeout(refreshTimer)
+        refreshTimer = null
+      }
+    }
+  })
+
+  /**
+   * Process queued requests after token refresh
+   */
+  const processQueue = (success: boolean) => {
+    requestQueue.forEach(({ resolve, reject, request, options }) => {
+      if (success) {
+        // Retry with new token
+        const token = getAccessToken()
+        const headers: Record<string, string> = { ...(options?.headers as Record<string, string> || {}) }
+        if (token) {
+          headers.Authorization = `Bearer ${token}`
+        }
+        resolve($fetch(request, { ...options, headers }))
+      } else {
+        reject(new Error('Token refresh failed'))
+      }
+    })
+    requestQueue = []
+  }
+
+  /**
+   * Check if URL requires authentication
+   */
+  const requiresAuth = (url: string): boolean => {
+    // Skip auth for public endpoints
+    const publicPaths = [
+      '/auth/login',
+      '/auth/register',
+      '/auth/refresh',
+      '/auth/captcha',
+      '/articles/published',
+      '/articles/tags'
+    ]
+
+    return !publicPaths.some(path => url.includes(path))
+  }
+
+  /**
+   * Check if this is an API request
+   */
+  const isApiRequest = (url: string): boolean => {
+    return url.startsWith('/api') || url.startsWith(apiBase)
+  }
+
+  /**
+   * Create authenticated fetch wrapper
+   */
+  const authFetch = $fetch.create({
+    /**
+     * Request interceptor - add auth headers
+     */
+    async onRequest({ options, request }: FetchContext) {
+      const url = typeof request === 'string' ? request : request.toString()
+
+      // Only handle API requests that require auth
+      if (!isApiRequest(url) || !requiresAuth(url)) {
+        return
+      }
+
+      // Check if token needs proactive refresh (expiring within 60 seconds)
+      if (isTokenExpiringSoon(60) && !isRefreshing) {
+        const refreshToken = getRefreshToken()
+        if (refreshToken) {
+          isRefreshing = true
+          try {
+            const success = await refreshTokens()
+            if (success) {
+              // Reschedule refresh timer with new expiration
+              scheduleTokenRefresh()
+            }
+          } finally {
+            isRefreshing = false
+          }
+        }
+      }
+
+      // Add authorization header
+      const token = getAccessToken()
+      if (token) {
+        addAuthHeader(options, token)
+      }
+    },
+
+    /**
+     * Response error interceptor - handle 401
+     */
+    async onResponseError({ request, options, response }: FetchContext & { response: Response }) {
+      const url = typeof request === 'string' ? request : request.toString()
+
+      // Only handle 401 for API requests
+      if (response.status !== 401 || !isApiRequest(url)) {
+        return
+      }
+
+      // Don't retry auth endpoints
+      if (url.includes('/auth/')) {
+        clearTokens()
+        return
+      }
+
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise<void>((resolve, reject) => {
+          requestQueue.push({
+            resolve: resolve as (value: unknown) => void,
+            reject,
+            request: url,
+            options: options as FetchOptions
+          })
+        })
+      }
+
+      // Try to refresh token
+      const refreshToken = getRefreshToken()
+      if (!refreshToken) {
+        clearTokens()
+        return
+      }
+
+      isRefreshing = true
+
+      try {
+        const success = await refreshTokens()
+
+        if (success) {
+          // Reschedule refresh timer with new expiration
+          scheduleTokenRefresh()
+
+          // Process queued requests
+          processQueue(true)
+
+          // Retry original request with new token
+          const newToken = getAccessToken()
+          if (newToken) {
+            addAuthHeader(options, newToken)
+          }
+
+          // Return retried request
+          return $fetch(url, options as FetchOptions)
+        } else {
+          processQueue(false)
+          clearTokens()
+        }
+      } catch {
+        processQueue(false)
+        clearTokens()
+      } finally {
+        isRefreshing = false
+      }
+    }
+  })
+
+  return {
+    provide: {
+      authFetch
+    }
+  }
+})
+
+// Type augmentation for Nuxt
+declare module '#app' {
+  interface NuxtApp {
+    $authFetch: typeof $fetch
+  }
+}
+
+declare module 'vue' {
+  interface ComponentCustomProperties {
+    $authFetch: typeof $fetch
+  }
+}

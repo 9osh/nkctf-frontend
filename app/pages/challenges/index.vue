@@ -682,6 +682,8 @@ const flagInput = ref('')
 const isSubmitting = ref(false)
 
 const { storedUser, initUser } = useUser()
+const { isAuthenticated } = useAuth()
+const authFetch = useAuthFetch()
 const colorMode = useColorMode()
 
 // Theme for MdPreview
@@ -745,8 +747,7 @@ const listError = ref<string | null>(null)
  * Fetch challenges from API with filters and pagination
  */
 const fetchChallenges = async () => {
-  const token = storedUser.value?.token
-  if (!token) {
+  if (!isAuthenticated.value) {
     listError.value = '请先登录'
     return
   }
@@ -765,11 +766,7 @@ const fetchChallenges = async () => {
 
     const url = `/api/challenges?${params.toString()}`
 
-    const response = await $fetch<ApiResponse<PaginatedResponse<ChallengeListItem>>>(url, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    const response = await authFetch<ApiResponse<PaginatedResponse<ChallengeListItem>>>(url)
 
     if (response.code === 200 && response.data) {
       challenges.value = response.data.records
@@ -923,8 +920,7 @@ const getDifficultyColor = (difficulty: string) => {
  * Fetch challenge details from API
  */
 const fetchChallengeDetail = async (challengeId: number): Promise<ChallengeDetail | null> => {
-  const token = storedUser.value?.token
-  if (!token) {
+  if (!isAuthenticated.value) {
     toast.add({
       title: '请先登录',
       color: 'error'
@@ -933,11 +929,7 @@ const fetchChallengeDetail = async (challengeId: number): Promise<ChallengeDetai
   }
 
   try {
-    const response = await $fetch<ApiResponse<ChallengeDetail>>(`/api/challenges/${challengeId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
+    const response = await authFetch<ApiResponse<ChallengeDetail>>(`/api/challenges/${challengeId}`)
 
     if (response.code === 200 && response.data) {
       return response.data
@@ -988,8 +980,7 @@ interface SubmitFlagResponse {
 const submitFlag = async () => {
   if (!flagInput.value || !selectedChallenge.value) return
 
-  const token = storedUser.value?.token
-  if (!token) {
+  if (!isAuthenticated.value) {
     toast.add({
       title: '请先登录',
       color: 'error'
@@ -1000,12 +991,8 @@ const submitFlag = async () => {
   isSubmitting.value = true
 
   try {
-    const response = await $fetch<ApiResponse<SubmitFlagResponse>>('/api/challenges/submit', {
+    const response = await authFetch<ApiResponse<SubmitFlagResponse>>('/api/challenges/submit', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
       body: {
         challengeId: selectedChallenge.value.id,
         flag: flagInput.value
@@ -1084,8 +1071,7 @@ interface UnlockHintResponse {
  * Unlock hint via API
  */
 const unlockHint = async (hint: Hint) => {
-  const token = storedUser.value?.token
-  if (!token) {
+  if (!isAuthenticated.value) {
     toast.add({
       title: '请先登录',
       color: 'error'
@@ -1099,12 +1085,8 @@ const unlockHint = async (hint: Hint) => {
   }
 
   try {
-    const response = await $fetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
+    const response = await authFetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
       body: {
         hintId: hint.id
       }

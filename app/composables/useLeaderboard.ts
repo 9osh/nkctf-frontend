@@ -48,15 +48,15 @@ export function useLeaderboard() {
   const isLoading = useState('leaderboard-loading', () => false)
   const error = useState<string | null>('leaderboard-error', () => null)
 
-  const { storedUser } = useUser()
+  const { isAuthenticated } = useAuth()
+  const authFetch = useAuthFetch()
 
   /**
    * Fetch leaderboard data from the backend API
    * @param page - Page number (1-indexed)
    */
   const fetchLeaderboard = async (page: number = 1) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       error.value = '请先登录'
       return
     }
@@ -65,11 +65,7 @@ export function useLeaderboard() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<LeaderboardResponse>>(`/api/leaderboard?page=${page}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
+      const response = await authFetch<ApiResponse<LeaderboardResponse>>(`/api/leaderboard?page=${page}`)
 
       if (response.code === 200 && response.data) {
         entries.value = response.data.entries

@@ -204,14 +204,27 @@ interface NavItem {
 
 const route = useRoute()
 const colorMode = useColorMode()
-const { user, isLoading, fetchUser, formattedPoints, formattedRank } = useUser()
+const { user, isLoading, fetchUser, formattedPoints, formattedRank, initUser } = useUser()
+const { isAuthenticated } = useAuth()
 const { hasPermission } = usePermission()
 
 const isCollapsed = ref(false)
 
-// Fetch user data on component mount
+// Initialize auth state and fetch user data on component mount
 onMounted(() => {
-  fetchUser()
+  initUser()
+  if (isAuthenticated.value) {
+    fetchUser()
+  }
+})
+
+// Re-fetch user data when authentication state changes
+// This handles the case when user logs in and navigates back
+watch(isAuthenticated, (newValue, oldValue) => {
+  if (newValue && !oldValue) {
+    // User just logged in
+    fetchUser()
+  }
 })
 
 const navItems = computed<NavItem[]>(() => {
@@ -234,7 +247,12 @@ const navItems = computed<NavItem[]>(() => {
 
   // Add admin menu for users with admin access
   if (hasPermission('admin:access')) {
-    items.push({ label: '文章管理', to: '/admin/articles', icon: 'i-lucide-shield-check' })
+    items.push(
+      { label: '文章管理', to: '/admin/articles', icon: 'i-lucide-file-check' },
+      { label: '用户管理', to: '/admin/users', icon: 'i-lucide-users' },
+      { label: '题目管理', to: '/admin/challenges', icon: 'i-lucide-shield' },
+      { label: '竞赛管理', to: '/admin/competitions', icon: 'i-lucide-trophy' }
+    )
   }
 
   return items

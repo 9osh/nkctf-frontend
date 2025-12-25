@@ -224,7 +224,9 @@ interface ApiResponse<T = unknown> {
  * Login response data
  */
 interface LoginData {
-  token: string
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
   userId: number
   username: string
   nickname: string

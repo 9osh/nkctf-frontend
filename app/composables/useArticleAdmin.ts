@@ -55,18 +55,8 @@ export function useArticleAdmin() {
   const isLoading = useState('admin-articles-loading', () => false)
   const error = useState<string | null>('admin-articles-error', () => null)
 
-  /**
-   * Get auth headers
-   */
-  const getAuthHeaders = (): Record<string, string> => {
-    if (import.meta.client) {
-      const token = localStorage.getItem('token')
-      if (token) {
-        return { Authorization: `Bearer ${token}` }
-      }
-    }
-    return {}
-  }
+  // Auth fetch for authenticated requests
+  const authFetch = useAuthFetch()
 
   /**
    * Fetch all articles (admin)
@@ -82,9 +72,8 @@ export function useArticleAdmin() {
       if (params.keyword) query.append('keyword', params.keyword)
       query.append('page', String(params.page || 1))
 
-      const response = await $fetch<ApiResponse<ArticleListResponse>>(
-        `${apiBase}/admin/articles?${query.toString()}`,
-        { headers: getAuthHeaders() }
+      const response = await authFetch<ApiResponse<ArticleListResponse>>(
+        `${apiBase}/admin/articles?${query.toString()}`
       )
 
       if (response.code === 200) {
@@ -113,9 +102,8 @@ export function useArticleAdmin() {
    */
   const fetchArticleDetail = async (id: number): Promise<Article | null> => {
     try {
-      const response = await $fetch<ApiResponse<Article>>(
-        `${apiBase}/admin/articles/${id}`,
-        { headers: getAuthHeaders() }
+      const response = await authFetch<ApiResponse<Article>>(
+        `${apiBase}/admin/articles/${id}`
       )
 
       if (response.code === 200) {
@@ -137,12 +125,11 @@ export function useArticleAdmin() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<null>>(
+      const response = await authFetch<ApiResponse<null>>(
         `${apiBase}/admin/articles/review`,
         {
           method: 'POST',
-          body: data,
-          headers: getAuthHeaders()
+          body: data
         }
       )
 
@@ -178,12 +165,11 @@ export function useArticleAdmin() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<Article>>(
+      const response = await authFetch<ApiResponse<Article>>(
         `${apiBase}/admin/articles/publish`,
         {
           method: 'POST',
-          body: data,
-          headers: getAuthHeaders()
+          body: data
         }
       )
 
@@ -208,11 +194,10 @@ export function useArticleAdmin() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<null>>(
+      const response = await authFetch<ApiResponse<null>>(
         `${apiBase}/admin/articles/${id}`,
         {
-          method: 'DELETE',
-          headers: getAuthHeaders()
+          method: 'DELETE'
         }
       )
 
@@ -235,12 +220,11 @@ export function useArticleAdmin() {
    */
   const createTag = async (data: TagFormData): Promise<Tag | null> => {
     try {
-      const response = await $fetch<ApiResponse<Tag>>(
+      const response = await authFetch<ApiResponse<Tag>>(
         `${apiBase}/admin/articles/tags`,
         {
           method: 'POST',
-          body: data,
-          headers: getAuthHeaders()
+          body: data
         }
       )
 
@@ -260,12 +244,11 @@ export function useArticleAdmin() {
    */
   const updateTag = async (data: TagFormData & { id: number }): Promise<Tag | null> => {
     try {
-      const response = await $fetch<ApiResponse<Tag>>(
+      const response = await authFetch<ApiResponse<Tag>>(
         `${apiBase}/admin/articles/tags`,
         {
           method: 'PUT',
-          body: data,
-          headers: getAuthHeaders()
+          body: data
         }
       )
 
@@ -285,11 +268,10 @@ export function useArticleAdmin() {
    */
   const deleteTag = async (id: number): Promise<boolean> => {
     try {
-      const response = await $fetch<ApiResponse<null>>(
+      const response = await authFetch<ApiResponse<null>>(
         `${apiBase}/admin/articles/tags/${id}`,
         {
-          method: 'DELETE',
-          headers: getAuthHeaders()
+          method: 'DELETE'
         }
       )
 

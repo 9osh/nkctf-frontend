@@ -2,6 +2,7 @@
  * User information composable
  * Manages user profile data fetched from the backend
  */
+import type { AuthResponse, StoredAuthUser } from './useAuth'
 
 export interface TeamMember {
   id: number
@@ -60,9 +61,9 @@ export interface UserProfile {
 
 /**
  * Basic user info stored in localStorage after login
+ * @deprecated Use StoredAuthUser from useAuth instead
  */
 export interface StoredUser {
-  token: string
   userId: number
   username: string
   nickname: string
@@ -70,45 +71,43 @@ export interface StoredUser {
 }
 
 export function useUser() {
+  const { isAuthenticated, authUser, setTokens, logout: authLogout, initAuth } = useAuth()
+  const authFetch = useAuthFetch()
+
   const user = useState<UserProfile | null>('user', () => null)
   const storedUser = useState<StoredUser | null>('stored-user', () => null)
   const isLoading = useState('user-loading', () => false)
   const error = useState<string | null>('user-error', () => null)
 
   /**
-   * Check if user is logged in (has valid token in localStorage)
+   * Check if user is logged in (has valid token)
    */
-  const isLoggedIn = computed(() => !!storedUser.value?.token)
+  const isLoggedIn = computed(() => isAuthenticated.value)
 
   /**
    * Initialize user state from localStorage
    * Should be called on app mount
    */
   const initUser = () => {
-    if (import.meta.client) {
-      const token = localStorage.getItem('token')
-      const userStr = localStorage.getItem('user')
-
-      if (token && userStr) {
-        try {
-          const userData = JSON.parse(userStr) as StoredUser
-          storedUser.value = userData
-        } catch {
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-        }
-      }
+    initAuth()
+    // Sync authUser to storedUser for backward compatibility
+    if (authUser.value) {
+      storedUser.value = authUser.value
     }
   }
 
   /**
-   * Set user after login/register and save to localStorage
+   * Set user after login/register
+   * @param authResponse - The response from login/register API
    */
-  const setStoredUser = (userData: StoredUser) => {
-    storedUser.value = userData
-    if (import.meta.client) {
-      localStorage.setItem('token', userData.token)
-      localStorage.setItem('user', JSON.stringify(userData))
+  const setStoredUser = (authResponse: AuthResponse) => {
+    setTokens(authResponse)
+    // Sync to storedUser for backward compatibility
+    storedUser.value = {
+      userId: authResponse.userId,
+      username: authResponse.username,
+      nickname: authResponse.nickname,
+      role: authResponse.role
     }
   }
 
@@ -125,8 +124,7 @@ export function useUser() {
    * Fetch user profile from the backend
    */
   const fetchUser = async () => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       error.value = '请先登录'
       return
     }
@@ -135,11 +133,7 @@ export function useUser() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<UserProfile>>('/api/user/profile', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
+      const response = await authFetch<ApiResponse<UserProfile>>('/api/user/profile')
 
       if (response.code === 200 && response.data) {
         user.value = response.data
@@ -153,12 +147,8 @@ export function useUser() {
       // Token expired or invalid
       if (fetchError.status === 401) {
         error.value = '登录已过期，请重新登录'
-        // Clear stored user
-        if (import.meta.client) {
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-        }
         storedUser.value = null
+        await navigateTo('/login')
       } else {
         error.value = fetchError?.data?.message || '获取用户信息失败'
       }
@@ -171,36 +161,12 @@ export function useUser() {
   /**
    * Clear user data (logout)
    * Calls backend logout API to invalidate token
+   * @param allDevices - If true, logs out from all devices
    */
-  const logout = async () => {
-    try {
-      // Call logout API to invalidate token on server
-      const token = storedUser.value?.token
-      if (token) {
-        await $fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }).catch(() => {
-          // Ignore errors, proceed with local logout
-        })
-      }
-
-      // Clear localStorage
-      if (import.meta.client) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-      }
-
-      user.value = null
-      storedUser.value = null
-
-      // Redirect to home page
-      await navigateTo('/')
-    } catch (e) {
-      console.error('Logout failed:', e)
-    }
+  const logout = async (allDevices = false) => {
+    user.value = null
+    storedUser.value = null
+    await authLogout(allDevices)
   }
 
   /**
@@ -208,17 +174,13 @@ export function useUser() {
    * POST /api/teams
    */
   const createTeam = async (teamName: string, description?: string) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<UserTeam>>('/api/teams', {
+      const response = await authFetch<ApiResponse<UserTeam>>('/api/teams', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
         body: { name: teamName, description: description || '' }
       })
 
@@ -242,17 +204,12 @@ export function useUser() {
    * GET /api/teams/my
    */
   const getMyTeam = async () => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<UserTeam>>('/api/teams/my', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
+      const response = await authFetch<ApiResponse<UserTeam>>('/api/teams/my')
 
       if (response.code === 200 && response.data) {
         if (user.value) {
@@ -280,17 +237,13 @@ export function useUser() {
    * POST /api/teams/join
    */
   const joinTeam = async (inviteToken: string) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<UserTeam>>('/api/teams/join', {
+      const response = await authFetch<ApiResponse<UserTeam>>('/api/teams/join', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
         body: { inviteToken }
       })
 
@@ -314,17 +267,13 @@ export function useUser() {
    * POST /api/teams/leave
    */
   const leaveTeam = async () => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse>('/api/teams/leave', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await authFetch<ApiResponse>('/api/teams/leave', {
+        method: 'POST'
       })
 
       if (response.code === 200) {
@@ -347,17 +296,13 @@ export function useUser() {
    * POST /api/teams/refresh-token
    */
   const refreshTeamInviteToken = async () => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<{ teamId: string, newInviteToken: string, message: string }>>('/api/teams/refresh-token', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await authFetch<ApiResponse<{ teamId: string, newInviteToken: string, message: string }>>('/api/teams/refresh-token', {
+        method: 'POST'
       })
 
       if (response.code === 200 && response.data) {
@@ -380,17 +325,13 @@ export function useUser() {
    * DELETE /api/teams
    */
   const dissolveTeam = async () => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse>('/api/teams', {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await authFetch<ApiResponse>('/api/teams', {
+        method: 'DELETE'
       })
 
       if (response.code === 200) {
@@ -413,17 +354,12 @@ export function useUser() {
    * GET /api/teams/invite-token
    */
   const getInviteToken = async () => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<{ inviteToken: string }>>('/api/teams/invite-token', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
+      const response = await authFetch<ApiResponse<{ inviteToken: string }>>('/api/teams/invite-token')
 
       if (response.code === 200 && response.data) {
         // Update team invite token
@@ -445,17 +381,13 @@ export function useUser() {
    * DELETE /api/teams/members/{userId}
    */
   const removeMember = async (userId: number) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse>(`/api/teams/members/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      const response = await authFetch<ApiResponse>(`/api/teams/members/${userId}`, {
+        method: 'DELETE'
       })
 
       if (response.code === 200) {
@@ -481,17 +413,13 @@ export function useUser() {
    * POST /api/teams/transfer-captain
    */
   const transferCaptain = async (newCaptainId: number) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse>('/api/teams/transfer-captain', {
+      const response = await authFetch<ApiResponse>('/api/teams/transfer-captain', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
         body: { newCaptainId }
       })
 
@@ -524,15 +452,8 @@ export function useUser() {
    */
   const fetchUserById = async (userId: number) => {
     try {
-      const headers: Record<string, string> = {}
-      // Include auth token if available for extended profile info
-      if (storedUser.value?.token) {
-        headers.Authorization = `Bearer ${storedUser.value.token}`
-      }
-
-      const response = await $fetch<ApiResponse<UserProfile>>(`/api/user/profile/${userId}`, {
-        headers
-      })
+      // authFetch will include auth header if user is logged in
+      const response = await authFetch<ApiResponse<UserProfile>>(`/api/user/profile/${userId}`)
 
       if (response.code === 200 && response.data) {
         return { success: true, user: response.data }
@@ -554,17 +475,13 @@ export function useUser() {
    * Update user bio
    */
   const updateBio = async (bio: string) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse>('/api/user/bio', {
+      const response = await authFetch<ApiResponse>('/api/user/bio', {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
         body: { bio }
       })
 

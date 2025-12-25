@@ -104,18 +104,8 @@ export function useLearn() {
   const isLoading = useState('articles-loading', () => false)
   const error = useState<string | null>('articles-error', () => null)
 
-  /**
-   * Get auth headers for authenticated requests
-   */
-  const getAuthHeaders = (): Record<string, string> => {
-    if (import.meta.client) {
-      const token = localStorage.getItem('token')
-      if (token) {
-        return { Authorization: `Bearer ${token}` }
-      }
-    }
-    return {}
-  }
+  // Auth fetch for authenticated requests
+  const authFetch = useAuthFetch()
 
   /**
    * Fetch all tags (public)
@@ -212,9 +202,8 @@ export function useLearn() {
       if (params.status) query.append('status', params.status)
       query.append('page', String(params.page || 1))
 
-      const response = await $fetch<ApiResponse<ArticleListResponse>>(
-        `${apiBase}/articles/my?${query.toString()}`,
-        { headers: getAuthHeaders() }
+      const response = await authFetch<ApiResponse<ArticleListResponse>>(
+        `${apiBase}/articles/my?${query.toString()}`
       )
 
       if (response.code === 200) {
@@ -246,9 +235,8 @@ export function useLearn() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<Article>>(
-        `${apiBase}/articles/my/${id}`,
-        { headers: getAuthHeaders() }
+      const response = await authFetch<ApiResponse<Article>>(
+        `${apiBase}/articles/my/${id}`
       )
 
       if (response.code === 200) {
@@ -274,12 +262,11 @@ export function useLearn() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<Article>>(
+      const response = await authFetch<ApiResponse<Article>>(
         `${apiBase}/articles`,
         {
           method: 'POST',
-          body: data,
-          headers: getAuthHeaders()
+          body: data
         }
       )
 
@@ -304,12 +291,11 @@ export function useLearn() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<Article>>(
+      const response = await authFetch<ApiResponse<Article>>(
         `${apiBase}/articles`,
         {
           method: 'PUT',
-          body: data,
-          headers: getAuthHeaders()
+          body: data
         }
       )
 
@@ -334,11 +320,10 @@ export function useLearn() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<null>>(
+      const response = await authFetch<ApiResponse<null>>(
         `${apiBase}/articles/${id}`,
         {
-          method: 'DELETE',
-          headers: getAuthHeaders()
+          method: 'DELETE'
         }
       )
 
@@ -365,11 +350,10 @@ export function useLearn() {
     error.value = null
 
     try {
-      const response = await $fetch<ApiResponse<null>>(
+      const response = await authFetch<ApiResponse<null>>(
         `${apiBase}/articles/${id}/submit`,
         {
-          method: 'POST',
-          headers: getAuthHeaders()
+          method: 'POST'
         }
       )
 

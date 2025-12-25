@@ -620,7 +620,8 @@ const {
   stopCountdown,
   getProgressPercentage
 } = useContainers()
-const { storedUser } = useUser()
+const { isAuthenticated } = useAuth()
+const authFetch = useAuthFetch()
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
@@ -863,8 +864,7 @@ const handleExtendContainer = async () => {
  * Unlock hint
  */
 const handleUnlockHint = async (hint: ChallengeHint) => {
-  const token = storedUser.value?.token
-  if (!token) {
+  if (!isAuthenticated.value) {
     toast.add({
       title: '请先登录',
       color: 'error'
@@ -879,12 +879,8 @@ const handleUnlockHint = async (hint: ChallengeHint) => {
   isUnlockingHint.value = hint.id
 
   try {
-    const response = await $fetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
+    const response = await authFetch<ApiResponse<UnlockHintResponse>>('/api/challenges/hints/unlock', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
       body: {
         hintId: hint.id
       }

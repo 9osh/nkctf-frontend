@@ -43,7 +43,8 @@ export function useContainers() {
   const containers = useState<Container[]>('user-containers', () => [])
   const isLoading = useState('containers-loading', () => false)
 
-  const { storedUser } = useUser()
+  const { isAuthenticated } = useAuth()
+  const authFetch = useAuthFetch()
 
   /**
    * Start countdown timer for a container
@@ -99,8 +100,7 @@ export function useContainers() {
    * POST /api/containers/start
    */
   const startContainer = async (challengeId: number, competitionId?: number | null) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
@@ -112,12 +112,8 @@ export function useContainers() {
         body.competitionId = competitionId
       }
 
-      const response = await $fetch<ApiResponse<ContainerStartResponse>>('/api/containers/start', {
+      const response = await authFetch<ApiResponse<ContainerStartResponse>>('/api/containers/start', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body
       })
 
@@ -151,18 +147,13 @@ export function useContainers() {
    * POST /api/containers/stop
    */
   const stopContainer = async (containerId: string) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse>('/api/containers/stop', {
+      const response = await authFetch<ApiResponse>('/api/containers/stop', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: { containerId }
       })
 
@@ -189,18 +180,13 @@ export function useContainers() {
    * POST /api/containers/extend
    */
   const extendContainer = async (containerId: string) => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     try {
-      const response = await $fetch<ApiResponse<Container>>('/api/containers/extend', {
+      const response = await authFetch<ApiResponse<Container>>('/api/containers/extend', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: { containerId }
       })
 
@@ -232,19 +218,14 @@ export function useContainers() {
    * GET /api/containers
    */
   const fetchContainers = async () => {
-    const token = storedUser.value?.token
-    if (!token) {
+    if (!isAuthenticated.value) {
       return { success: false, error: '请先登录' }
     }
 
     isLoading.value = true
 
     try {
-      const response = await $fetch<ApiResponse<Container[]>>('/api/containers', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
+      const response = await authFetch<ApiResponse<Container[]>>('/api/containers')
 
       if (response.code === 200 && response.data) {
         containers.value = response.data
