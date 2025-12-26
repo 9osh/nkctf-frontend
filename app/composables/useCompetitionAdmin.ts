@@ -69,6 +69,14 @@ export interface AdminCompetitionChallenge {
   category: ChallengeCategory
   difficulty: ChallengeDifficulty
   points: number
+  /** Whether the challenge is enabled for practice mode */
+  enabled: boolean
+  /** Scoring type: STATIC or DYNAMIC */
+  scoringType?: 'STATIC' | 'DYNAMIC'
+  /** Maximum points for dynamic scoring */
+  maxPoints?: number
+  /** Minimum points for dynamic scoring */
+  minPoints?: number
   sortOrder: number
 }
 

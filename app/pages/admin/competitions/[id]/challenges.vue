@@ -80,9 +80,22 @@
                 variant="subtle"
                 size="xs"
               />
+              <UBadge
+                v-if="!challenge.enabled"
+                label="仅竞赛"
+                color="neutral"
+                variant="outline"
+                size="xs"
+              />
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400">
               {{ challenge.points }} 分
+              <span
+                v-if="challenge.scoringType === 'DYNAMIC'"
+                class="text-purple-500"
+              >
+                · 动态积分 ({{ challenge.maxPoints }}-{{ challenge.minPoints }})
+              </span>
             </p>
           </div>
 

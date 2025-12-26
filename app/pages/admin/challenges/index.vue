@@ -161,7 +161,17 @@
                   name="i-lucide-container"
                   class="w-3.5 h-3.5"
                 />
-                动态
+                容器
+              </span>
+              <span
+                v-if="challenge.scoringType === 'DYNAMIC'"
+                class="flex items-center gap-1 text-purple-500"
+              >
+                <UIcon
+                  name="i-lucide-trending-down"
+                  class="w-3.5 h-3.5"
+                />
+                动态分
               </span>
             </div>
 

@@ -76,7 +76,7 @@
             </div>
 
             <!-- Category & Difficulty -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   分类 <span class="text-red-500">*</span>
@@ -98,18 +98,6 @@
                   :items="difficultyOptions"
                   value-key="value"
                   class="w-full"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  分值 <span class="text-red-500">*</span>
-                </label>
-                <UInput
-                  v-model.number="formData.points"
-                  type="number"
-                  min="1"
-                  placeholder="100"
                 />
               </div>
             </div>
@@ -136,6 +124,159 @@
                   />
                 </template>
               </ClientOnly>
+            </div>
+
+            <!-- Author -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                作者
+              </label>
+              <UInput
+                v-model="formData.author"
+                placeholder="题目作者..."
+                class="w-full"
+              />
+            </div>
+          </div>
+        </UCard>
+
+        <!-- Scoring Settings -->
+        <UCard>
+          <template #header>
+            <h2 class="text-lg font-semibold">
+              积分设置
+            </h2>
+          </template>
+
+          <div class="space-y-4">
+            <!-- Scoring Type Toggle -->
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  积分类型
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ formData.scoringType === 'STATIC' ? '静态积分：所有人获得相同分数' : '动态积分：分数随解题人数递减' }}
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <UButton
+                  :color="formData.scoringType === 'STATIC' ? 'primary' : 'neutral'"
+                  :variant="formData.scoringType === 'STATIC' ? 'solid' : 'outline'"
+                  size="sm"
+                  @click="formData.scoringType = 'STATIC'"
+                >
+                  静态积分
+                </UButton>
+                <UButton
+                  :color="formData.scoringType === 'DYNAMIC' ? 'primary' : 'neutral'"
+                  :variant="formData.scoringType === 'DYNAMIC' ? 'solid' : 'outline'"
+                  size="sm"
+                  @click="formData.scoringType = 'DYNAMIC'"
+                >
+                  动态积分
+                </UButton>
+              </div>
+            </div>
+
+            <!-- Static Points (always shown) -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {{ formData.scoringType === 'STATIC' ? '分值' : '练习模式分值' }} <span class="text-red-500">*</span>
+              </label>
+              <UInput
+                v-model.number="formData.points"
+                type="number"
+                min="1"
+                placeholder="100"
+              />
+              <p
+                v-if="formData.scoringType === 'DYNAMIC'"
+                class="text-xs text-gray-500 dark:text-gray-400 mt-1"
+              >
+                动态积分题目启用为练习题前，必须设置此静态分值
+              </p>
+            </div>
+
+            <!-- Dynamic Scoring Settings -->
+            <div
+              v-if="formData.scoringType === 'DYNAMIC'"
+              class="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700"
+            >
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    最大分值 <span class="text-red-500">*</span>
+                  </label>
+                  <UInput
+                    v-model.number="formData.maxPoints"
+                    type="number"
+                    min="1"
+                    placeholder="500"
+                  />
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    首次解题时的分数
+                  </p>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    最小分值 <span class="text-red-500">*</span>
+                  </label>
+                  <UInput
+                    v-model.number="formData.minPoints"
+                    type="number"
+                    min="1"
+                    placeholder="100"
+                  />
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    分数下限
+                  </p>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    衰减系数
+                  </label>
+                  <UInput
+                    v-model.number="formData.decay"
+                    type="number"
+                    min="1"
+                    placeholder="20"
+                  />
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    达到最小分值所需的解题人数
+                  </p>
+                </div>
+              </div>
+
+              <!-- Formula Preview -->
+              <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  动态积分公式预览
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                  currentPoints = max({{ formData.minPoints }}, (({{ formData.minPoints }} - {{ formData.maxPoints }}) / {{ formData.decay }}²) × solves² + {{ formData.maxPoints }})
+                </p>
+                <div class="mt-3 grid grid-cols-4 gap-2 text-xs">
+                  <div class="text-center p-2 bg-white dark:bg-gray-700 rounded">
+                    <p class="text-gray-500 dark:text-gray-400">1 人解出</p>
+                    <p class="font-medium text-gray-900 dark:text-white">{{ formData.maxPoints }} 分</p>
+                  </div>
+                  <div class="text-center p-2 bg-white dark:bg-gray-700 rounded">
+                    <p class="text-gray-500 dark:text-gray-400">5 人解出</p>
+                    <p class="font-medium text-gray-900 dark:text-white">{{ calculateDynamicPoints(5) }} 分</p>
+                  </div>
+                  <div class="text-center p-2 bg-white dark:bg-gray-700 rounded">
+                    <p class="text-gray-500 dark:text-gray-400">10 人解出</p>
+                    <p class="font-medium text-gray-900 dark:text-white">{{ calculateDynamicPoints(10) }} 分</p>
+                  </div>
+                  <div class="text-center p-2 bg-white dark:bg-gray-700 rounded">
+                    <p class="text-gray-500 dark:text-gray-400">{{ formData.decay }}+ 人解出</p>
+                    <p class="font-medium text-gray-900 dark:text-white">{{ formData.minPoints }} 分</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </UCard>
@@ -353,7 +494,8 @@ import type {
   AdminHint,
   ChallengeCategory,
   ChallengeDifficulty,
-  ChallengeFormData
+  ChallengeFormData,
+  ScoringType
 } from '~/composables/useChallengeAdmin'
 
 // Use admin middleware for route protection
@@ -400,10 +542,16 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const formData = reactive<ChallengeFormData & { enabled: boolean }>({
   title: '',
   description: '',
+  content: '',
   category: 'WEB',
   difficulty: 'EASY',
   points: 100,
+  scoringType: 'STATIC',
+  maxPoints: 500,
+  minPoints: 100,
+  decay: 20,
   flag: '',
+  author: '',
   isDynamic: false,
   dockerImage: '',
   enabled: false
@@ -428,6 +576,27 @@ const difficultyOptions = [
   { label: '困难', value: 'HARD' as ChallengeDifficulty }
 ]
 
+const scoringTypeOptions = [
+  { label: '静态积分', value: 'STATIC' as ScoringType },
+  { label: '动态积分', value: 'DYNAMIC' as ScoringType }
+]
+
+/**
+ * Calculate dynamic points based on solve count
+ * Formula: currentPoints = max(minPoints, ((minPoints - maxPoints) / decay²) × solves² + maxPoints)
+ */
+const calculateDynamicPoints = (solves: number): number => {
+  const maxPts = formData.maxPoints || 500
+  const minPts = formData.minPoints || 100
+  const decayVal = formData.decay || 20
+
+  if (solves <= 0) return maxPts
+  if (solves >= decayVal) return minPts
+
+  const calculated = ((minPts - maxPts) / (decayVal * decayVal)) * (solves * solves) + maxPts
+  return Math.round(Math.max(minPts, calculated))
+}
+
 /**
  * Load challenge data for editing
  */
@@ -440,10 +609,16 @@ const loadChallenge = async () => {
   if (challenge) {
     formData.title = challenge.title
     formData.description = challenge.description
+    formData.content = challenge.content || ''
     formData.category = challenge.category
     formData.difficulty = challenge.difficulty
     formData.points = challenge.points
+    formData.scoringType = challenge.scoringType || 'STATIC'
+    formData.maxPoints = challenge.maxPoints || 500
+    formData.minPoints = challenge.minPoints || 100
+    formData.decay = challenge.decay || 20
     formData.flag = challenge.flag || ''
+    formData.author = challenge.author || ''
     formData.isDynamic = challenge.isDynamic
     formData.dockerImage = challenge.dockerImage || ''
     formData.enabled = challenge.enabled
@@ -479,16 +654,42 @@ const handleSave = async () => {
     return
   }
 
+  // Validate dynamic scoring settings
+  if (formData.scoringType === 'DYNAMIC') {
+    if (!formData.maxPoints || formData.maxPoints < 1) {
+      toast.add({ title: '请输入有效的最大分值', color: 'error' })
+      return
+    }
+    if (!formData.minPoints || formData.minPoints < 1) {
+      toast.add({ title: '请输入有效的最小分值', color: 'error' })
+      return
+    }
+    if (formData.maxPoints <= formData.minPoints) {
+      toast.add({ title: '最大分值必须大于最小分值', color: 'error' })
+      return
+    }
+  }
+
   isSaving.value = true
 
   const data: ChallengeFormData = {
     title: formData.title,
     description: formData.description,
+    content: formData.content,
     category: formData.category,
     difficulty: formData.difficulty,
     points: formData.points,
+    scoringType: formData.scoringType,
+    author: formData.author,
     isDynamic: formData.isDynamic,
     enabled: formData.enabled
+  }
+
+  // Add dynamic scoring fields if using DYNAMIC scoring
+  if (formData.scoringType === 'DYNAMIC') {
+    data.maxPoints = formData.maxPoints
+    data.minPoints = formData.minPoints
+    data.decay = formData.decay || 20
   }
 
   if (formData.isDynamic) {

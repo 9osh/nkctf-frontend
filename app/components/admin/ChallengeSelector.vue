@@ -88,9 +88,22 @@
                     variant="subtle"
                     size="xs"
                   />
+                  <UBadge
+                    v-if="!challenge.enabled"
+                    label="仅竞赛"
+                    color="neutral"
+                    variant="outline"
+                    size="xs"
+                  />
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {{ challenge.points }} 分 · {{ challenge.solveCount }} 解
+                  <span
+                    v-if="challenge.scoringType === 'DYNAMIC'"
+                    class="text-purple-500"
+                  >
+                    · 动态积分
+                  </span>
                 </p>
               </div>
             </div>
@@ -248,8 +261,8 @@ const loadChallenges = async () => {
 
   await fetchChallenges({
     category: selectedCategory.value,
-    keyword: searchQuery.value || undefined,
-    enabled: true // Only show enabled challenges
+    keyword: searchQuery.value || undefined
+    // Don't filter by enabled - allow all challenges for competition
   })
 
   // Get from composable state

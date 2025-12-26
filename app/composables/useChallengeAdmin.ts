@@ -16,6 +16,9 @@ export type ChallengeCategory = 'WEB' | 'PWN' | 'CRYPTO' | 'REVERSE' | 'MISC' | 
 // Challenge difficulty
 export type ChallengeDifficulty = 'EASY' | 'MEDIUM' | 'HARD'
 
+// Scoring type for challenges
+export type ScoringType = 'STATIC' | 'DYNAMIC'
+
 // Admin hint interface
 export interface AdminHint {
   id: number
@@ -29,10 +32,21 @@ export interface AdminChallenge {
   id: number
   title: string
   description: string
+  content?: string
   category: ChallengeCategory
   difficulty: ChallengeDifficulty
+  /** Static points value (used in practice mode) */
   points: number
+  /** Scoring type: STATIC or DYNAMIC */
+  scoringType: ScoringType
+  /** Maximum points for dynamic scoring */
+  maxPoints?: number
+  /** Minimum points for dynamic scoring */
+  minPoints?: number
+  /** Decay factor for dynamic scoring (solves needed to reach minPoints) */
+  decay?: number
   flag: string
+  author?: string
   isDynamic: boolean
   dockerImage?: string
   attachmentUrl?: string
@@ -50,6 +64,12 @@ export interface AdminChallengeListItem {
   category: ChallengeCategory
   difficulty: ChallengeDifficulty
   points: number
+  /** Scoring type: STATIC or DYNAMIC */
+  scoringType: ScoringType
+  /** Maximum points for dynamic scoring */
+  maxPoints?: number
+  /** Minimum points for dynamic scoring */
+  minPoints?: number
   enabled: boolean
   isDynamic: boolean
   solveCount: number
@@ -80,12 +100,27 @@ export interface AdminChallengeParams {
 export interface ChallengeFormData {
   title: string
   description: string
+  content?: string
   category: ChallengeCategory
   difficulty: ChallengeDifficulty
+  /** Static points value (required, used in practice mode) */
   points: number
+  /** Scoring type: STATIC or DYNAMIC (default: STATIC) */
+  scoringType?: ScoringType
+  /** Maximum points for dynamic scoring (required if scoringType=DYNAMIC) */
+  maxPoints?: number
+  /** Minimum points for dynamic scoring (required if scoringType=DYNAMIC) */
+  minPoints?: number
+  /** Decay factor for dynamic scoring (default: 20) */
+  decay?: number
+  /** Flag value (required if isDynamic=false) */
   flag?: string
+  author?: string
+  /** Whether challenge uses dynamic container */
   isDynamic: boolean
+  /** Docker image (required if isDynamic=true) */
   dockerImage?: string
+  /** Whether visible in practice mode */
   enabled?: boolean
 }
 

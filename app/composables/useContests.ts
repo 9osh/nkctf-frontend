@@ -6,6 +6,20 @@
 export type ContestStatus = 'inactive' | 'active' | 'ending'
 
 /**
+ * Scoring type for challenges
+ */
+export type ScoringType = 'STATIC' | 'DYNAMIC'
+
+/**
+ * First blood entry for challenge
+ */
+export interface FirstBloodEntry {
+  rank: number
+  teamName: string
+  solveTime: string
+}
+
+/**
  * Challenge info in competition list
  */
 export interface CompetitionChallenge {
@@ -14,7 +28,18 @@ export interface CompetitionChallenge {
   description: string
   category: string
   difficulty: 'EASY' | 'MEDIUM' | 'HARD'
+  /** Static points value (used in practice mode) */
   points: number
+  /** Current calculated points (for dynamic scoring in competition) */
+  currentPoints?: number
+  /** Scoring type: STATIC or DYNAMIC */
+  scoringType: ScoringType
+  /** Maximum points for dynamic scoring */
+  maxPoints?: number
+  /** Minimum points for dynamic scoring */
+  minPoints?: number
+  /** Decay factor for dynamic scoring */
+  decay?: number
   solves: number
   solved: boolean
 }
@@ -47,7 +72,18 @@ export interface CompetitionChallengeDetail {
   description: string
   category: string
   difficulty: 'EASY' | 'MEDIUM' | 'HARD'
+  /** Static points value (used in practice mode) */
   points: number
+  /** Current calculated points (for dynamic scoring in competition) */
+  currentPoints?: number
+  /** Scoring type: STATIC or DYNAMIC */
+  scoringType: ScoringType
+  /** Maximum points for dynamic scoring */
+  maxPoints?: number
+  /** Minimum points for dynamic scoring */
+  minPoints?: number
+  /** Decay factor for dynamic scoring */
+  decay?: number
   solves: number
   solved: boolean
   author: string
@@ -55,6 +91,8 @@ export interface CompetitionChallengeDetail {
   hints: ChallengeHint[] | null
   attachments: ChallengeAttachment[] | null
   hasDocker: boolean
+  /** First blood entries (top 3 solvers) */
+  firstBloods?: FirstBloodEntry[]
 }
 
 /**

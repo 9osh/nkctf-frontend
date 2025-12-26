@@ -522,16 +522,25 @@
                     placeholder="NKCTF{...}"
                     icon="i-lucide-flag"
                     class="flex-1"
-                    :disabled="selectedChallenge.solved"
                   />
                   <UButton
                     :loading="isSubmitting"
-                    :disabled="selectedChallenge.solved"
+                    :disabled="!flagInput.trim()"
                     @click="submitFlag"
                   >
-                    {{ selectedChallenge.solved ? '已解决' : '提交' }}
+                    {{ selectedChallenge.solved ? '重新提交' : '提交' }}
                   </UButton>
                 </div>
+                <p
+                  v-if="selectedChallenge.solved"
+                  class="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1"
+                >
+                  <UIcon
+                    name="i-lucide-check-circle"
+                    class="w-3 h-3"
+                  />
+                  您已解决此题目，仍可重新提交
+                </p>
               </div>
 
               <!-- Hints -->
@@ -1002,18 +1011,29 @@ const submitFlag = async () => {
     if (response.code === 200 && response.data) {
       const data = response.data
       if (data.correct) {
-        toast.add({
-          title: data.message,
-          description: `获得 ${data.pointsAwarded} 分！当前排名：${data.rank}`,
-          color: 'success'
-        })
-        selectedChallenge.value.solved = true
+        // Check if points were awarded (first solve vs repeated solve)
+        if (data.pointsAwarded && data.pointsAwarded > 0) {
+          // First correct submission - points awarded
+          toast.add({
+            title: data.message,
+            description: `获得 ${data.pointsAwarded} 分！当前排名：${data.rank}`,
+            color: 'success'
+          })
+          selectedChallenge.value.solved = true
+          // Refresh challenge list to update solved status
+          fetchChallenges()
+        } else {
+          // Repeated correct submission - no points
+          toast.add({
+            title: data.message,
+            description: `当前总分：${data.totalScore}，排名：${data.rank}`,
+            color: 'info'
+          })
+        }
         flagInput.value = ''
-        // Refresh challenge list to update solved status
-        fetchChallenges()
       } else {
         toast.add({
-          title: data.message,
+          title: data.message || 'Flag 错误',
           color: 'error'
         })
       }

@@ -201,7 +201,15 @@
                     name="i-lucide-star"
                     class="w-4 h-4"
                   />
-                  {{ challenge.points }} pts
+                  {{ challenge.currentPoints ?? challenge.points }} pts
+                  <UBadge
+                    v-if="challenge.scoringType === 'DYNAMIC'"
+                    label="动态"
+                    color="info"
+                    variant="subtle"
+                    size="xs"
+                    class="ml-1"
+                  />
                 </span>
                 <span class="flex items-center gap-1">
                   <UIcon
@@ -269,9 +277,20 @@
                     variant="solid"
                     size="xs"
                   />
-                  <span class="text-xs text-gray-500 dark:text-gray-400">
-                    {{ selectedChallenge.points }} pts
+                  <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                    <UIcon
+                      name="i-lucide-star"
+                      class="w-3 h-3"
+                    />
+                    {{ currentChallengeDetail?.currentPoints ?? selectedChallenge.currentPoints ?? selectedChallenge.points }} pts
                   </span>
+                  <UBadge
+                    v-if="currentChallengeDetail?.scoringType === 'DYNAMIC' || selectedChallenge.scoringType === 'DYNAMIC'"
+                    label="动态积分"
+                    color="info"
+                    variant="subtle"
+                    size="xs"
+                  />
                 </div>
               </div>
               <UButton
@@ -316,6 +335,85 @@
                   />
                   {{ selectedChallenge.solves }} 人解决
                 </span>
+              </div>
+
+              <!-- Dynamic Scoring Info -->
+              <div
+                v-if="currentChallengeDetail?.scoringType === 'DYNAMIC'"
+                class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg"
+              >
+                <div class="flex items-center gap-2 mb-2">
+                  <UIcon
+                    name="i-lucide-trending-down"
+                    class="w-4 h-4 text-blue-600 dark:text-blue-400"
+                  />
+                  <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    动态积分
+                  </span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-xs">
+                  <div class="text-center p-2 bg-white dark:bg-gray-800 rounded">
+                    <p class="text-gray-500 dark:text-gray-400">当前分值</p>
+                    <p class="font-medium text-gray-900 dark:text-white">
+                      {{ currentChallengeDetail.currentPoints ?? currentChallengeDetail.maxPoints }} pts
+                    </p>
+                  </div>
+                  <div class="text-center p-2 bg-white dark:bg-gray-800 rounded">
+                    <p class="text-gray-500 dark:text-gray-400">最大/最小</p>
+                    <p class="font-medium text-gray-900 dark:text-white">
+                      {{ currentChallengeDetail.maxPoints }}/{{ currentChallengeDetail.minPoints }}
+                    </p>
+                  </div>
+                  <div class="text-center p-2 bg-white dark:bg-gray-800 rounded">
+                    <p class="text-gray-500 dark:text-gray-400">衰减人数</p>
+                    <p class="font-medium text-gray-900 dark:text-white">
+                      {{ currentChallengeDetail.decay }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- First Bloods -->
+              <div
+                v-if="currentChallengeDetail?.firstBloods && currentChallengeDetail.firstBloods.length > 0"
+                class="space-y-2"
+              >
+                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <UIcon
+                    name="i-lucide-medal"
+                    class="w-4 h-4 text-yellow-500"
+                  />
+                  首杀榜
+                </h4>
+                <div class="space-y-2">
+                  <div
+                    v-for="blood in currentChallengeDetail.firstBloods"
+                    :key="blood.rank"
+                    class="flex items-center gap-3 p-2 rounded-lg"
+                    :class="{
+                      'bg-yellow-50 dark:bg-yellow-900/20': blood.rank === 1,
+                      'bg-gray-50 dark:bg-gray-800/50': blood.rank === 2,
+                      'bg-orange-50 dark:bg-orange-900/20': blood.rank === 3
+                    }"
+                  >
+                    <span
+                      class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+                      :class="{
+                        'bg-yellow-400 text-yellow-900': blood.rank === 1,
+                        'bg-gray-300 text-gray-700': blood.rank === 2,
+                        'bg-orange-400 text-orange-900': blood.rank === 3
+                      }"
+                    >
+                      {{ blood.rank }}
+                    </span>
+                    <span class="flex-1 text-sm font-medium text-gray-900 dark:text-white">
+                      {{ blood.teamName }}
+                    </span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ formatSolveTime(blood.solveTime) }}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <!-- Description / Content (Markdown) -->
@@ -532,16 +630,25 @@
                   placeholder="NKCTF{...}"
                   icon="i-lucide-flag"
                   class="flex-1"
-                  :disabled="selectedChallenge.solved"
                 />
                 <UButton
                   :loading="isSubmitting"
-                  :disabled="selectedChallenge.solved || !flagInput.trim()"
+                  :disabled="!flagInput.trim()"
                   @click="submitFlag"
                 >
-                  {{ selectedChallenge.solved ? '已解决' : '提交' }}
+                  {{ selectedChallenge.solved ? '重新提交' : '提交' }}
                 </UButton>
               </div>
+              <p
+                v-if="selectedChallenge.solved"
+                class="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1"
+              >
+                <UIcon
+                  name="i-lucide-check-circle"
+                  class="w-3 h-3"
+                />
+                您已解决此题目，仍可重新提交
+              </p>
             </div>
 
             <!-- Review Mode Notice -->
@@ -729,19 +836,37 @@ const submitFlag = async () => {
 
   if (result.success && result.data) {
     if (result.data.correct) {
-      toast.add({
-        title: result.data.scored ? '🎉 Flag 正确！' : 'Flag 正确',
-        description: result.data.scored
-          ? `获得 ${result.data.pointsAwarded} 分，当前排名第 ${result.data.rank}`
-          : '比赛已结束，本次提交不计分',
-        color: 'success'
-      })
-      // Update local state
-      if (selectedChallenge.value) {
-        selectedChallenge.value.solved = true
-        selectedChallenge.value.solves++
+      // Check if points were awarded
+      if (result.data.scored && result.data.pointsAwarded && result.data.pointsAwarded > 0) {
+        // First correct submission during active competition - points awarded
+        toast.add({
+          title: '🎉 Flag 正确！',
+          description: `获得 ${result.data.pointsAwarded} 分，当前排名第 ${result.data.rank}`,
+          color: 'success'
+        })
+        // Update local state - only increment solves if this is the first solve
+        if (selectedChallenge.value && !selectedChallenge.value.solved) {
+          selectedChallenge.value.solved = true
+          selectedChallenge.value.solves++
+        }
+        closeModal()
+      } else if (result.data.pointsAwarded === 0) {
+        // Repeated correct submission or competition ended
+        toast.add({
+          title: 'Flag 正确',
+          description: result.data.message || '该题目已被解决，不再计分',
+          color: 'info'
+        })
+        flagInput.value = ''
+      } else {
+        // Edge case: correct but not scored (competition ended)
+        toast.add({
+          title: 'Flag 正确',
+          description: '比赛已结束，本次提交不计分',
+          color: 'info'
+        })
+        flagInput.value = ''
       }
-      closeModal()
     } else {
       toast.add({
         title: 'Flag 错误',
@@ -983,6 +1108,20 @@ const getDifficultyText = (difficulty: string) => {
     HARD: '困难'
   }
   return textMap[difficulty] || difficulty
+}
+
+/**
+ * Format solve time for first blood display
+ */
+const formatSolveTime = (dateStr: string): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 // SEO
