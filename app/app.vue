@@ -148,6 +148,23 @@ const userMenuItems = computed(() => [
         </div>
       </template>
 
+      <template #center>
+        <div class="flex items-center gap-4 text-sm">
+          <NuxtLink
+            to="/terms"
+            class="text-muted hover:text-[var(--ui-text)] transition-colors"
+          >
+            服务条款
+          </NuxtLink>
+          <NuxtLink
+            to="/privacy"
+            class="text-muted hover:text-[var(--ui-text)] transition-colors"
+          >
+            隐私政策
+          </NuxtLink>
+        </div>
+      </template>
+
       <template #right>
         <div class="flex gap-2">
           <UButton
