@@ -157,6 +157,16 @@
 
             <!-- Actions -->
             <div class="flex items-center gap-2 flex-shrink-0">
+              <!-- View Details -->
+              <UButton
+                icon="i-lucide-eye"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                aria-label="查看详情"
+                @click="openUserPreview(user)"
+              />
+
               <!-- Toggle Enabled -->
               <UButton
                 :icon="user.enabled ? 'i-lucide-user-x' : 'i-lucide-user-check'"
@@ -292,6 +302,190 @@
         </UCard>
       </template>
     </UModal>
+
+    <!-- User Preview Modal -->
+    <UModal v-model:open="showUserPreview">
+      <template #content>
+        <UCard
+          v-if="previewUser"
+          :ui="{ root: 'w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col' }"
+        >
+          <template #header>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <UAvatar
+                  :alt="previewUser.nickname || previewUser.username"
+                  size="lg"
+                />
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {{ previewUser.nickname || previewUser.username }}
+                  </h3>
+                  <div class="flex items-center gap-2 mt-1">
+                    <UBadge
+                      :label="previewUser.role === 'ADMIN' ? '管理员' : '用户'"
+                      :color="previewUser.role === 'ADMIN' ? 'primary' : 'neutral'"
+                      variant="subtle"
+                      size="xs"
+                    />
+                    <UBadge
+                      :label="previewUser.enabled ? '已启用' : '已禁用'"
+                      :color="previewUser.enabled ? 'success' : 'error'"
+                      variant="subtle"
+                      size="xs"
+                    />
+                  </div>
+                </div>
+              </div>
+              <UButton
+                icon="i-lucide-x"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                @click="showUserPreview = false"
+              />
+            </div>
+          </template>
+
+          <!-- Scrollable Content -->
+          <div class="overflow-y-auto flex-1 px-1">
+            <div class="space-y-6 py-2">
+              <!-- Basic Info -->
+              <div>
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <UIcon
+                    name="i-lucide-user"
+                    class="w-4 h-4"
+                  />
+                  基本信息
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">用户名</label>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ previewUser.username }}</p>
+                  </div>
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">昵称</label>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ previewUser.nickname || '-' }}</p>
+                  </div>
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">邮箱</label>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ previewUser.email }}</p>
+                  </div>
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">用户ID</label>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">#{{ previewUser.id }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stats -->
+              <div>
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <UIcon
+                    name="i-lucide-bar-chart-3"
+                    class="w-4 h-4"
+                  />
+                  统计数据
+                </h4>
+                <div class="grid grid-cols-2 sm:grid-cols-2 gap-3">
+                  <div class="bg-primary-50 dark:bg-primary-900/20 rounded-lg p-3 text-center">
+                    <p class="text-2xl font-bold text-primary-600 dark:text-primary-400">{{ previewUser.points }}</p>
+                    <label class="text-xs text-gray-500 dark:text-gray-400">积分</label>
+                  </div>
+                  <div class="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center">
+                    <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ previewUser.teamId ? '已加入' : '未加入' }}</p>
+                    <label class="text-xs text-gray-500 dark:text-gray-400">团队状态</label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Team Info -->
+              <div v-if="previewUser.teamName">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <UIcon
+                    name="i-lucide-users"
+                    class="w-4 h-4"
+                  />
+                  团队信息
+                </h4>
+                <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">{{ previewUser.teamName }}</p>
+                </div>
+              </div>
+
+              <!-- Timestamps -->
+              <div>
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <UIcon
+                    name="i-lucide-calendar"
+                    class="w-4 h-4"
+                  />
+                  时间记录
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">注册时间</label>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ formatDateTime(previewUser.createTime) }}</p>
+                  </div>
+                  <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">最后更新</label>
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ formatDateTime(previewUser.updateTime) }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bio -->
+              <div v-if="previewUser.bio">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <UIcon
+                    name="i-lucide-file-text"
+                    class="w-4 h-4"
+                  />
+                  个人简介
+                </h4>
+                <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                  <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ previewUser.bio }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <template #footer>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <UButton
+                  :icon="previewUser.enabled ? 'i-lucide-user-x' : 'i-lucide-user-check'"
+                  :color="previewUser.enabled ? 'warning' : 'success'"
+                  variant="outline"
+                  size="sm"
+                  @click="handleToggleEnabledFromPreview"
+                >
+                  {{ previewUser.enabled ? '禁用用户' : '启用用户' }}
+                </UButton>
+                <UButton
+                  icon="i-lucide-shield"
+                  variant="outline"
+                  size="sm"
+                  @click="openRoleModalFromPreview"
+                >
+                  更改角色
+                </UButton>
+              </div>
+              <UButton
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="ghost"
+                size="sm"
+                @click="handleDeleteFromPreview"
+              >
+                删除用户
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
   </NuxtLayout>
 </template>
 
@@ -327,7 +521,9 @@ const currentPage = ref(1)
 
 // Modal state
 const showRoleModal = ref(false)
+const showUserPreview = ref(false)
 const selectedUser = ref<AdminUser | null>(null)
+const previewUser = ref<AdminUser | null>(null)
 const newRole = ref<UserRole>('USER')
 const isChangingRole = ref(false)
 
@@ -423,6 +619,74 @@ const handleChangeRole = async () => {
 
   if (success) {
     showRoleModal.value = false
+  }
+}
+
+/**
+ * Format date time string
+ */
+const formatDateTime = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+/**
+ * Open user preview modal
+ */
+const openUserPreview = (user: AdminUser) => {
+  previewUser.value = user
+  showUserPreview.value = true
+}
+
+/**
+ * Handle toggle enabled from preview
+ */
+const handleToggleEnabledFromPreview = async () => {
+  if (!previewUser.value) return
+
+  const action = previewUser.value.enabled ? '禁用' : '启用'
+  if (!confirm(`确定要${action}用户 "${previewUser.value.nickname || previewUser.value.username}" 吗？`)) {
+    return
+  }
+
+  const success = await toggleUserEnabled(previewUser.value.id, !previewUser.value.enabled)
+  if (success) {
+    // Update preview user
+    previewUser.value.enabled = !previewUser.value.enabled
+  }
+}
+
+/**
+ * Open role modal from preview
+ */
+const openRoleModalFromPreview = () => {
+  if (!previewUser.value) return
+  selectedUser.value = previewUser.value
+  newRole.value = previewUser.value.role
+  showRoleModal.value = true
+}
+
+/**
+ * Handle delete from preview
+ */
+const handleDeleteFromPreview = async () => {
+  if (!previewUser.value) return
+
+  if (!confirm(`确定要删除用户 "${previewUser.value.nickname || previewUser.value.username}" 吗？此操作不可恢复。`)) {
+    return
+  }
+
+  const success = await deleteUser(previewUser.value.id)
+  if (success) {
+    showUserPreview.value = false
+    await loadUsers()
   }
 }
 

@@ -279,7 +279,7 @@
       <template #content>
         <UCard
           v-if="previewArticle"
-          :ui="{ root: 'w-full max-w-3xl max-h-[80vh] overflow-auto' }"
+          :ui="{ root: 'w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col' }"
         >
           <template #header>
             <div class="flex items-center justify-between">
@@ -309,24 +309,27 @@
             </div>
           </template>
 
-          <ClientOnly>
-            <MdPreview
-              v-if="previewContent"
-              :model-value="previewContent"
-              :theme="previewTheme"
-              language="zh-CN"
-            />
-            <template #fallback>
-              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                加载中...
-              </div>
-            </template>
-          </ClientOnly>
-          <div
-            v-if="!previewContent"
-            class="text-center py-8 text-gray-500 dark:text-gray-400"
-          >
-            加载中...
+          <div class="overflow-y-auto flex-1 p-4 min-h-0">
+            <ClientOnly>
+              <MdPreview
+                v-if="previewContent"
+                :model-value="previewContent"
+                :theme="previewTheme"
+                language="zh-CN"
+                class="my-article-preview"
+              />
+              <template #fallback>
+                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                  加载中...
+                </div>
+              </template>
+            </ClientOnly>
+            <div
+              v-if="!previewContent"
+              class="text-center py-8 text-gray-500 dark:text-gray-400"
+            >
+              加载中...
+            </div>
           </div>
         </UCard>
       </template>
@@ -565,5 +568,27 @@ onMounted(() => {
   line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+</style>
+
+<style>
+/* Override md-editor-v3 preview styles for transparent background */
+.my-article-preview {
+  background-color: transparent !important;
+}
+
+.my-article-preview .md-editor-preview-wrapper {
+  background-color: transparent !important;
+}
+
+.my-article-preview .md-editor-preview {
+  background-color: transparent !important;
+}
+
+/* Dark mode overrides */
+.dark .my-article-preview,
+.dark .my-article-preview .md-editor-preview-wrapper,
+.dark .my-article-preview .md-editor-preview {
+  background-color: transparent !important;
 }
 </style>

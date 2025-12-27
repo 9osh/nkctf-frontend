@@ -15,73 +15,29 @@
           class="w-6 h-6 text-primary-500"
         />
         <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
-          写新文章
+          发布新文章
         </h1>
+        <UBadge
+          label="管理员"
+          color="warning"
+          variant="subtle"
+        />
       </div>
     </template>
 
     <template #header-right>
       <div class="flex items-center gap-3">
-        <!-- Auto-save indicator -->
-        <span
-          v-if="lastSavedText"
-          class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1"
-        >
-          <UIcon
-            name="i-lucide-save"
-            class="w-3.5 h-3.5"
-          />
-          {{ lastSavedText }}
-        </span>
-
-        <UButton
-          variant="outline"
-          :loading="isSaving"
-          @click="handleSaveDraft"
-        >
-          保存草稿
-        </UButton>
         <UButton
           icon="i-lucide-send"
-          :loading="isSubmitting"
-          @click="handleSubmitForReview"
+          :loading="isPublishing"
+          @click="handlePublish"
         >
-          提交审核
+          直接发布
         </UButton>
       </div>
     </template>
 
     <div class="p-6">
-      <!-- Restore Draft Alert -->
-      <UAlert
-        v-if="showRestoreAlert"
-        icon="i-lucide-file-clock"
-        color="info"
-        class="mb-6"
-      >
-        <template #title>
-          发现未保存的草稿
-        </template>
-        <template #description>
-          是否恢复上次编辑的内容？
-          <div class="mt-2 flex gap-2">
-            <UButton
-              size="xs"
-              @click="restoreDraft"
-            >
-              恢复
-            </UButton>
-            <UButton
-              size="xs"
-              variant="outline"
-              @click="discardDraft"
-            >
-              放弃
-            </UButton>
-          </div>
-        </template>
-      </UAlert>
-
       <!-- Editor Form -->
       <div class="max-w-5xl mx-auto space-y-6">
         <!-- Title -->
@@ -139,7 +95,6 @@
               :preview="true"
               :toolbars-exclude="['save', 'htmlPreview', 'github', 'catalog']"
               style="height: 600px;"
-              @on-save="handleSaveDraft"
             />
             <template #fallback>
               <div class="h-[600px] flex items-center justify-center bg-gray-50 dark:bg-gray-800">
@@ -157,30 +112,21 @@
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 
-// Use auth middleware for route protection
+// Use admin middleware for route protection
 definePageMeta({
-  middleware: 'auth'
+  middleware: 'admin'
 })
 
 const router = useRouter()
 
 useSeoMeta({
-  title: '写新文章 - NKCTF',
-  description: '创建新的学习指南文章'
+  title: '发布新文章 - NKCTF Admin',
+  description: '管理员直接发布文章'
 })
 
 // Composables
-const { isLoggedIn } = useUser()
-const { tags, fetchTags, createArticle, submitForReview: submitArticleForReview } = useLearn()
-const {
-  lastSavedText,
-  isSaving,
-  saveDraft,
-  loadDraft,
-  hasDraft,
-  clearDraft,
-  startAutoSave
-} = useAutoSave('new')
+const { tags, fetchTags } = useLearn()
+const { publishDirectly, isLoading } = useArticleAdmin()
 const colorMode = useColorMode()
 
 // Editor theme
@@ -195,8 +141,7 @@ const formData = reactive({
 const selectedTagIds = ref<number[]>([])
 
 // State
-const showRestoreAlert = ref(false)
-const isSubmitting = ref(false)
+const isPublishing = ref(false)
 
 /**
  * Toggle tag selection
@@ -211,66 +156,9 @@ const toggleTag = (tagId: number) => {
 }
 
 /**
- * Get current form data for auto-save
+ * Handle publish
  */
-const getCurrentData = () => ({
-  title: formData.title,
-  summary: formData.summary,
-  content: formData.content,
-  tagIds: selectedTagIds.value
-})
-
-/**
- * Restore draft from localStorage
- */
-const restoreDraft = () => {
-  const draft = loadDraft()
-  if (draft) {
-    formData.title = draft.title || ''
-    formData.summary = draft.summary || ''
-    formData.content = draft.content || ''
-    selectedTagIds.value = draft.tagIds || []
-  }
-  showRestoreAlert.value = false
-}
-
-/**
- * Discard saved draft
- */
-const discardDraft = () => {
-  clearDraft()
-  showRestoreAlert.value = false
-}
-
-/**
- * Handle save draft button
- */
-const handleSaveDraft = async () => {
-  // Save to localStorage
-  saveDraft(getCurrentData())
-
-  // Also create/update on server if there's content
-  if (formData.title || formData.content) {
-    const result = await createArticle({
-      title: formData.title || '无标题草稿',
-      summary: formData.summary,
-      content: formData.content,
-      tagIds: selectedTagIds.value
-    })
-
-    if (result) {
-      // Clear local draft after server save
-      clearDraft()
-      // Navigate to edit page with the new article ID
-      router.push(`/learn/edit/${result.id}`)
-    }
-  }
-}
-
-/**
- * Handle submit for review
- */
-const handleSubmitForReview = async () => {
+const handlePublish = async () => {
   // Validation
   if (!formData.title.trim()) {
     alert('请输入文章标题')
@@ -281,27 +169,21 @@ const handleSubmitForReview = async () => {
     return
   }
 
-  isSubmitting.value = true
+  isPublishing.value = true
 
   try {
-    // Create article
-    const article = await createArticle({
+    const article = await publishDirectly({
       title: formData.title,
-      summary: formData.summary,
+      summary: formData.summary || undefined,
       content: formData.content,
-      tagIds: selectedTagIds.value
+      tagIds: selectedTagIds.value.length > 0 ? selectedTagIds.value : undefined
     })
 
     if (article) {
-      // Submit for review
-      const success = await submitArticleForReview(article.id)
-      if (success) {
-        clearDraft()
-        router.push('/learn/my')
-      }
+      router.push('/admin/articles')
     }
   } finally {
-    isSubmitting.value = false
+    isPublishing.value = false
   }
 }
 
@@ -311,35 +193,16 @@ const handleSubmitForReview = async () => {
 const handleBack = () => {
   if (formData.title || formData.content) {
     if (confirm('确定要离开吗？未保存的内容将丢失。')) {
-      router.push('/learn/my')
+      router.push('/admin/articles')
     }
   } else {
-    router.push('/learn/my')
+    router.push('/admin/articles')
   }
 }
 
 // Initialize
 onMounted(async () => {
-  if (!isLoggedIn.value) return
-
-  // Fetch tags
   await fetchTags()
-
-  // Check for saved draft
-  if (hasDraft()) {
-    showRestoreAlert.value = true
-  }
-
-  // Start auto-save
-  startAutoSave(getCurrentData)
-})
-
-// Warn before leaving with unsaved changes
-onBeforeUnmount(() => {
-  // Save current state before leaving
-  if (formData.title || formData.content) {
-    saveDraft(getCurrentData())
-  }
 })
 </script>
 

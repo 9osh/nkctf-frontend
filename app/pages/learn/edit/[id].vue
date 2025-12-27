@@ -113,25 +113,22 @@
         </UAlert>
 
         <!-- Title -->
-        <div>
-          <UInput
+        <div class="w-full">
+          <input
             v-model="formData.title"
+            type="text"
             placeholder="请输入文章标题..."
-            size="xl"
-            :ui="{
-              base: 'text-2xl font-bold',
-              size: { xl: 'text-2xl' }
-            }"
-          />
+            class="w-full text-xl sm:text-2xl md:text-3xl font-bold bg-transparent border border-transparent rounded-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white px-3 py-2 transition-colors focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+          >
         </div>
 
         <!-- Summary -->
-        <div>
-          <UTextarea
+        <div class="w-full">
+          <textarea
             v-model="formData.summary"
-            placeholder="请输入文章摘要（可选）..."
-            :rows="2"
-            autoresize
+            placeholder="请输入文章摘要（可选），用于在文章列表中展示..."
+            rows="2"
+            class="w-full text-sm sm:text-base bg-transparent border border-transparent rounded-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-600 dark:text-gray-300 px-3 py-2 resize-none leading-relaxed transition-colors focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
           />
         </div>
 

@@ -20,6 +20,12 @@
     <template #header-right>
       <div class="flex items-center gap-3">
         <UButton
+          icon="i-lucide-plus"
+          @click="router.push('/admin/articles/write')"
+        >
+          写新文章
+        </UButton>
+        <UButton
           icon="i-lucide-tags"
           variant="outline"
           @click="router.push('/admin/articles/tags')"
@@ -263,10 +269,11 @@
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 审核意见（拒绝时必填）
               </label>
-              <UTextarea
+              <textarea
                 v-model="reviewComment"
                 placeholder="请输入审核意见..."
-                :rows="3"
+                rows="3"
+                class="w-full min-h-[80px] max-h-[200px] text-sm bg-transparent border border-gray-300 dark:border-gray-600 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white px-3 py-2 resize-y transition-colors focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               />
             </div>
           </div>
@@ -304,55 +311,280 @@
       <template #content>
         <UCard
           v-if="selectedArticle"
-          :ui="{ root: 'w-full max-w-3xl max-h-[80vh] overflow-auto' }"
+          :ui="{ root: 'w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col', body: 'flex-1 overflow-y-auto p-0 min-h-0' }"
         >
           <template #header>
-            <div class="flex items-center justify-between">
-              <div>
-                <h3 class="text-lg font-semibold">
-                  {{ selectedArticle.title }}
-                </h3>
-                <div class="flex items-center gap-2 mt-1">
-                  <UBadge
-                    :label="getStatusLabel(selectedArticle.status)"
-                    :color="getStatusColor(selectedArticle.status)"
-                    variant="subtle"
-                    size="xs"
-                  />
-                  <span class="text-xs text-gray-500 dark:text-gray-400">
-                    {{ selectedArticle.author.nickname }}
-                  </span>
+            <div class="flex items-center justify-between gap-4">
+              <!-- Navigation & Title -->
+              <div class="flex items-center gap-3 min-w-0 flex-1">
+                <!-- Previous Article -->
+                <UButton
+                  icon="i-lucide-chevron-left"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="!hasPreviousArticle"
+                  aria-label="上一篇"
+                  @click="navigateArticle(-1)"
+                />
+
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1 flex-wrap">
+                    <UBadge
+                      :label="getStatusLabel(selectedArticle.status)"
+                      :color="getStatusColor(selectedArticle.status)"
+                      variant="subtle"
+                    />
+                    <UBadge
+                      v-for="tag in selectedArticle.tags"
+                      :key="tag.id"
+                      :label="tag.name"
+                      :style="{ backgroundColor: tag.color + '20', color: tag.color }"
+                      variant="subtle"
+                      size="xs"
+                    />
+                    <span class="text-xs text-gray-400">
+                      {{ currentArticleIndex + 1 }} / {{ adminArticles.length }}
+                    </span>
+                  </div>
+                  <h3 class="text-lg sm:text-xl font-bold text-gray-900 dark:text-white line-clamp-1">
+                    {{ selectedArticle.title }}
+                  </h3>
                 </div>
+
+                <!-- Next Article -->
+                <UButton
+                  icon="i-lucide-chevron-right"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="!hasNextArticle"
+                  aria-label="下一篇"
+                  @click="navigateArticle(1)"
+                />
               </div>
+
+              <!-- Close -->
               <UButton
                 icon="i-lucide-x"
                 color="neutral"
                 variant="ghost"
                 size="sm"
+                class="flex-shrink-0"
                 @click="showPreviewModal = false"
               />
             </div>
           </template>
 
-          <ClientOnly>
-            <MdPreview
-              v-if="previewContent"
-              :model-value="previewContent"
-              :theme="previewTheme"
-              language="zh-CN"
-            />
-            <template #fallback>
-              <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+            <!-- Article Metadata Panel -->
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+              <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <span class="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <UIcon
+                    name="i-lucide-user"
+                    class="w-4 h-4"
+                  />
+                  <span class="font-medium">{{ selectedArticle.author.nickname }}</span>
+                </span>
+                <span class="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <UIcon
+                    name="i-lucide-calendar-plus"
+                    class="w-4 h-4"
+                  />
+                  创建: {{ formatDateTime(selectedArticle.createTime) }}
+                </span>
+                <span
+                  v-if="selectedArticle.updateTime !== selectedArticle.createTime"
+                  class="flex items-center gap-1.5 text-gray-600 dark:text-gray-400"
+                >
+                  <UIcon
+                    name="i-lucide-calendar-check"
+                    class="w-4 h-4"
+                  />
+                  更新: {{ formatDateTime(selectedArticle.updateTime) }}
+                </span>
+                <span
+                  v-if="selectedArticle.publishTime"
+                  class="flex items-center gap-1.5 text-green-600 dark:text-green-400"
+                >
+                  <UIcon
+                    name="i-lucide-globe"
+                    class="w-4 h-4"
+                  />
+                  发布: {{ formatDateTime(selectedArticle.publishTime) }}
+                </span>
+                <span
+                  v-if="selectedArticle.viewCount"
+                  class="flex items-center gap-1.5 text-gray-600 dark:text-gray-400"
+                >
+                  <UIcon
+                    name="i-lucide-eye"
+                    class="w-4 h-4"
+                  />
+                  {{ selectedArticle.viewCount }} 次阅读
+                </span>
+              </div>
+
+              <!-- Summary -->
+              <p
+                v-if="previewSummary"
+                class="mt-3 text-sm text-gray-600 dark:text-gray-400 italic border-l-2 border-gray-300 dark:border-gray-600 pl-3"
+              >
+                {{ previewSummary }}
+              </p>
+            </div>
+
+            <!-- Review History (for rejected articles) -->
+            <div
+              v-if="selectedArticle.status === 'REJECTED' && selectedArticle.reviewComment"
+              class="px-4 py-3 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800"
+            >
+              <div class="flex items-start gap-3">
+                <UIcon
+                  name="i-lucide-message-circle-x"
+                  class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+                />
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-sm font-medium text-red-700 dark:text-red-300">
+                      审核未通过
+                    </span>
+                    <span
+                      v-if="selectedArticle.reviewer"
+                      class="text-xs text-red-600 dark:text-red-400"
+                    >
+                      by {{ selectedArticle.reviewer.nickname }}
+                    </span>
+                    <span
+                      v-if="selectedArticle.reviewTime"
+                      class="text-xs text-red-500 dark:text-red-400"
+                    >
+                      {{ formatDateTime(selectedArticle.reviewTime) }}
+                    </span>
+                  </div>
+                  <p class="text-sm text-red-600 dark:text-red-300">
+                    {{ selectedArticle.reviewComment }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Review Panel (for pending articles) -->
+            <div
+              v-if="selectedArticle.status === 'PENDING'"
+              class="px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800"
+            >
+              <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  <UIcon
+                    name="i-lucide-clock"
+                    class="w-5 h-5 text-yellow-600"
+                  />
+                  <span class="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                    待审核
+                  </span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <input
+                    v-model="previewReviewComment"
+                    type="text"
+                    placeholder="输入审核意见（拒绝时必填）..."
+                    class="w-full text-sm bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-700 rounded-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white px-3 py-1.5 transition-colors focus:outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20"
+                  >
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  <UButton
+                    icon="i-lucide-x"
+                    color="error"
+                    size="sm"
+                    :loading="isReviewingFromPreview"
+                    @click="handlePreviewReview(false)"
+                  >
+                    拒绝
+                  </UButton>
+                  <UButton
+                    icon="i-lucide-check"
+                    color="success"
+                    size="sm"
+                    :loading="isReviewingFromPreview"
+                    @click="handlePreviewReview(true)"
+                  >
+                    通过
+                  </UButton>
+                </div>
+              </div>
+            </div>
+
+            <!-- Markdown Content -->
+            <div class="p-4 min-h-0">
+              <ClientOnly>
+                <MdPreview
+                  v-if="previewContent"
+                  :model-value="previewContent"
+                  :theme="previewTheme"
+                  language="zh-CN"
+                  class="article-preview-content"
+                />
+                <template #fallback>
+                  <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <UIcon
+                      name="i-lucide-loader-2"
+                      class="w-6 h-6 animate-spin mx-auto mb-2"
+                    />
+                    加载中...
+                  </div>
+                </template>
+              </ClientOnly>
+              <div
+                v-if="!previewContent && !isLoadingPreview"
+                class="text-center py-8 text-gray-500 dark:text-gray-400"
+              >
+                <UIcon
+                  name="i-lucide-file-x"
+                  class="w-8 h-8 mx-auto mb-2"
+                />
+                暂无内容
+              </div>
+              <div
+                v-if="isLoadingPreview"
+                class="text-center py-8 text-gray-500 dark:text-gray-400"
+              >
+                <UIcon
+                  name="i-lucide-loader-2"
+                  class="w-6 h-6 animate-spin mx-auto mb-2"
+                />
                 加载中...
               </div>
-            </template>
-          </ClientOnly>
-          <div
-            v-if="!previewContent"
-            class="text-center py-8 text-gray-500 dark:text-gray-400"
-          >
-            加载中...
-          </div>
+            </div>
+
+          <!-- Footer Actions -->
+          <template #footer>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <UButton
+                  v-if="selectedArticle.status === 'PUBLISHED'"
+                  icon="i-lucide-external-link"
+                  variant="outline"
+                  size="sm"
+                  @click="viewPublishedArticle"
+                >
+                  查看已发布
+                </UButton>
+                <UButton
+                  icon="i-lucide-trash-2"
+                  color="error"
+                  variant="ghost"
+                  size="sm"
+                  @click="handleDeleteFromPreview"
+                >
+                  删除文章
+                </UButton>
+              </div>
+              <div class="text-xs text-gray-400">
+                按 ← → 切换文章 | ESC 关闭
+              </div>
+            </div>
+          </template>
         </UCard>
       </template>
     </UModal>
@@ -403,6 +635,10 @@ const selectedArticle = ref<Article | null>(null)
 const reviewComment = ref('')
 const isReviewing = ref(false)
 const previewContent = ref('')
+const previewSummary = ref('')
+const previewReviewComment = ref('')
+const isReviewingFromPreview = ref(false)
+const isLoadingPreview = ref(false)
 
 // Status options
 const statusOptions = [
@@ -412,6 +648,16 @@ const statusOptions = [
   { label: '已发布', value: 'PUBLISHED' as ArticleStatus },
   { label: '已拒绝', value: 'REJECTED' as ArticleStatus }
 ]
+
+// Computed: current article index in list
+const currentArticleIndex = computed(() => {
+  if (!selectedArticle.value) return -1
+  return adminArticles.value.findIndex(a => a.id === selectedArticle.value!.id)
+})
+
+// Computed: navigation availability
+const hasPreviousArticle = computed(() => currentArticleIndex.value > 0)
+const hasNextArticle = computed(() => currentArticleIndex.value < adminArticles.value.length - 1)
 
 /**
  * Get status label
@@ -449,6 +695,21 @@ const formatDate = (dateStr: string | null | undefined): string => {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
+  })
+}
+
+/**
+ * Format date time string with time
+ */
+const formatDateTime = (dateStr: string | null | undefined): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
   })
 }
 
@@ -502,12 +763,98 @@ const openReviewModal = (article: Article) => {
 const openPreviewModal = async (article: Article) => {
   selectedArticle.value = article
   previewContent.value = ''
+  previewSummary.value = ''
+  previewReviewComment.value = ''
+  isLoadingPreview.value = true
   showPreviewModal.value = true
 
   // Fetch full article content
   const detail = await fetchArticleDetail(article.id)
-  if (detail?.content) {
-    previewContent.value = detail.content
+  if (detail) {
+    previewContent.value = detail.content || ''
+    previewSummary.value = detail.summary || ''
+    // Update selected article with full details
+    selectedArticle.value = detail
+  }
+  isLoadingPreview.value = false
+}
+
+/**
+ * Navigate to previous/next article in preview
+ */
+const navigateArticle = async (direction: number) => {
+  const newIndex = currentArticleIndex.value + direction
+  if (newIndex >= 0 && newIndex < adminArticles.value.length) {
+    const article = adminArticles.value[newIndex]
+    if (article) {
+      await openPreviewModal(article)
+    }
+  }
+}
+
+/**
+ * Handle review from preview modal
+ */
+const handlePreviewReview = async (approved: boolean) => {
+  if (!selectedArticle.value) return
+
+  // Require comment for rejection
+  if (!approved && !previewReviewComment.value.trim()) {
+    alert('请输入拒绝原因')
+    return
+  }
+
+  isReviewingFromPreview.value = true
+
+  const success = await reviewArticle({
+    articleId: selectedArticle.value.id,
+    approved,
+    comment: previewReviewComment.value || undefined
+  })
+
+  isReviewingFromPreview.value = false
+
+  if (success) {
+    // Update local article status
+    if (selectedArticle.value) {
+      selectedArticle.value.status = approved ? 'PUBLISHED' : 'REJECTED'
+      if (!approved) {
+        selectedArticle.value.reviewComment = previewReviewComment.value
+      }
+    }
+    previewReviewComment.value = ''
+    await loadArticles()
+
+    // Navigate to next pending article or close if no more
+    if (hasNextArticle.value) {
+      await navigateArticle(1)
+    }
+  }
+}
+
+/**
+ * View published article in new tab
+ */
+const viewPublishedArticle = () => {
+  if (selectedArticle.value) {
+    window.open(`/learn/${selectedArticle.value.id}`, '_blank')
+  }
+}
+
+/**
+ * Handle delete from preview modal
+ */
+const handleDeleteFromPreview = async () => {
+  if (!selectedArticle.value) return
+
+  if (!confirm('确定要删除这篇文章吗？此操作不可恢复。')) {
+    return
+  }
+
+  const success = await deleteArticle(selectedArticle.value.id)
+  if (success) {
+    showPreviewModal.value = false
+    await loadArticles()
   }
 }
 
@@ -553,8 +900,60 @@ const handleDelete = async (articleId: number) => {
   }
 }
 
+/**
+ * Handle keyboard navigation in preview modal
+ */
+const handleKeydown = (event: KeyboardEvent) => {
+  if (!showPreviewModal.value) return
+
+  switch (event.key) {
+    case 'ArrowLeft':
+      if (hasPreviousArticle.value) {
+        navigateArticle(-1)
+      }
+      break
+    case 'ArrowRight':
+      if (hasNextArticle.value) {
+        navigateArticle(1)
+      }
+      break
+    case 'Escape':
+      showPreviewModal.value = false
+      break
+  }
+}
+
 // Initialize
 onMounted(() => {
   loadArticles()
+  // Add keyboard event listener
+  window.addEventListener('keydown', handleKeydown)
+})
+
+// Cleanup
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
+
+<style>
+/* Override md-editor-v3 preview styles for transparent background */
+.article-preview-content {
+  background-color: transparent !important;
+}
+
+.article-preview-content .md-editor-preview-wrapper {
+  background-color: transparent !important;
+}
+
+.article-preview-content .md-editor-preview {
+  background-color: transparent !important;
+}
+
+/* Dark mode overrides */
+.dark .article-preview-content,
+.dark .article-preview-content .md-editor-preview-wrapper,
+.dark .article-preview-content .md-editor-preview {
+  background-color: transparent !important;
+}
+</style>
