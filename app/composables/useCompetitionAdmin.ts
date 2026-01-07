@@ -432,6 +432,64 @@ export function useCompetitionAdmin() {
     }
   }
 
+  // ================== Status Override Operations ==================
+
+  /**
+   * Set status override (admin manually forces a status)
+   */
+  const setStatusOverride = async (id: number, status: CompetitionStatus): Promise<boolean> => {
+    error.value = null
+
+    try {
+      const response = await authFetch<ApiResponse<null>>(
+        `${apiBase}/admin/competitions/${id}/status-override`,
+        {
+          method: 'PUT',
+          body: { status }
+        }
+      )
+
+      if (response.code === 200) {
+        // Update local state
+        const competition = adminCompetitions.value.find(c => c.id === id)
+        if (competition) {
+          competition.status = status
+        }
+        return true
+      } else {
+        throw new Error(response.message)
+      }
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '设置状态覆盖失败'
+      return false
+    }
+  }
+
+  /**
+   * Clear status override (return to time-based computation)
+   */
+  const clearStatusOverride = async (id: number): Promise<boolean> => {
+    error.value = null
+
+    try {
+      const response = await authFetch<ApiResponse<null>>(
+        `${apiBase}/admin/competitions/${id}/status-override`,
+        {
+          method: 'DELETE'
+        }
+      )
+
+      if (response.code === 200) {
+        return true
+      } else {
+        throw new Error(response.message)
+      }
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '清除状态覆盖失败'
+      return false
+    }
+  }
+
   return {
     // State
     adminCompetitions,
@@ -451,6 +509,9 @@ export function useCompetitionAdmin() {
     removeChallengeFromCompetition,
     reorderCompetitionChallenges,
     // Participant operations
-    fetchParticipants
+    fetchParticipants,
+    // Status override operations
+    setStatusOverride,
+    clearStatusOverride
   }
 }

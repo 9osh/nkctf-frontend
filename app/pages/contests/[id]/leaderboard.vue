@@ -28,8 +28,13 @@
 
     <template #header-right>
       <div class="flex items-center gap-3">
+        <!-- Status Countdown -->
+        <StatusCountdown
+          v-if="currentContest && currentContest.status !== 'ending'"
+          :contest="currentContest"
+        />
         <span
-          v-if="currentContest"
+          v-else-if="currentContest"
           class="text-sm text-gray-500 dark:text-gray-400"
         >
           {{ currentContest.title }}
@@ -46,6 +51,23 @@
     </template>
 
     <div class="flex flex-col h-full">
+      <!-- Frozen Banner -->
+      <div
+        v-if="isFrozen"
+        class="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-6 py-3"
+      >
+        <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+          <UIcon
+            name="i-lucide-snowflake"
+            class="w-5 h-5"
+          />
+          <span class="font-medium">排行榜已冻结</span>
+          <span class="text-sm text-blue-600 dark:text-blue-400">
+            - 比赛已结束，排名不再更新
+          </span>
+        </div>
+      </div>
+
       <!-- Main Content Area -->
       <div class="flex-1 p-6">
         <!-- Loading State -->
@@ -267,9 +289,16 @@ const {
   fetchContests,
   fetchCompetitionLeaderboard
 } = useContests()
+const { subscribeToCompetition, isLeaderboardFrozen } = useCompetitionStatus()
+
+// Store unsubscribe function
+let unsubscribeStatus: (() => void) | null = null
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
+
+// Check if leaderboard is frozen
+const isFrozen = computed(() => currentContest.value ? isLeaderboardFrozen(currentContest.value) : false)
 
 // Leaderboard state
 const isLoadingLeaderboard = ref(false)
@@ -373,14 +402,30 @@ useSeoMeta({
   description: '查看比赛排行榜'
 })
 
-// Fetch data on mount
+// Fetch data on mount and subscribe to status updates
 onMounted(() => {
   loadData()
+  // Subscribe to this competition's status updates
+  unsubscribeStatus = subscribeToCompetition(contestId.value)
+})
+
+// Cleanup subscription on unmount
+onUnmounted(() => {
+  if (unsubscribeStatus) {
+    unsubscribeStatus()
+    unsubscribeStatus = null
+  }
 })
 
 // Watch for route changes
 watch(() => route.params.id, () => {
+  // Cleanup previous subscription
+  if (unsubscribeStatus) {
+    unsubscribeStatus()
+  }
   loadData()
+  // Subscribe to new competition
+  unsubscribeStatus = subscribeToCompetition(contestId.value)
 })
 </script>
 

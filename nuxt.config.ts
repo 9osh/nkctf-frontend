@@ -25,12 +25,17 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2025-01-15',
 
-  // Proxy API requests to backend server
+  // Proxy API and WebSocket requests to backend server
   nitro: {
     devProxy: {
       '/api': {
         target: (process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8080') + '/api',
         changeOrigin: true
+      },
+      '/ws': {
+        target: (process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8080').replace('/api', '') + '/ws',
+        changeOrigin: true,
+        ws: true
       }
     }
   },

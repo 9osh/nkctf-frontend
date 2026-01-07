@@ -56,6 +56,9 @@ const userMenuItems = computed(() => [
 
 <template>
   <UApp>
+    <!-- Connection status indicator -->
+    <ConnectionStatus />
+
     <UHeader>
       <template #left>
         <NuxtLink

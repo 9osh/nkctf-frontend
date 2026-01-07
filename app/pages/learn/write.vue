@@ -342,10 +342,3 @@ onBeforeUnmount(() => {
   }
 })
 </script>
-
-<style>
-/* Override md-editor-v3 styles for dark mode */
-.md-editor-dark {
-  --md-bk-color: var(--color-gray-900);
-}
-</style>

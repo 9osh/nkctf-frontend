@@ -2,6 +2,9 @@
  * Auth plugin with centralized fetch interceptor
  * Automatically handles authentication headers and token refresh
  * Includes background timer to refresh tokens before expiration
+ *
+ * Note: Refresh token is stored as HttpOnly cookie by server,
+ * not accessible via JavaScript. We just send credentials: 'include'
  */
 
 import type { FetchContext } from 'ofetch'
@@ -46,7 +49,7 @@ function addAuthHeader(options: FetchContext['options'], token: string): void {
 }
 
 export default defineNuxtPlugin(() => {
-  const { getAccessToken, getRefreshToken, getTokenExpiresAt, isTokenExpiringSoon, refreshTokens, clearTokens } = useAuth()
+  const { getAccessToken, getTokenExpiresAt, isTokenExpiringSoon, refreshTokens, clearTokens } = useAuth()
   const config = useRuntimeConfig()
   const apiBase = config.public.apiBase as string || '/api'
 
@@ -71,6 +74,9 @@ export default defineNuxtPlugin(() => {
 
   /**
    * Schedule automatic token refresh before expiration
+   * Note: We can't check for refresh token existence (HttpOnly cookie),
+   * so we schedule based on access token expiration and let the server
+   * handle cookie validation
    */
   const scheduleTokenRefresh = () => {
     // Clear existing timer
@@ -80,10 +86,9 @@ export default defineNuxtPlugin(() => {
     }
 
     const expiresAt = getTokenExpiresAt()
-    const refreshToken = getRefreshToken()
 
-    // Don't schedule if no token or no refresh token
-    if (!expiresAt || !refreshToken) {
+    // Don't schedule if no access token expiration
+    if (!expiresAt) {
       return
     }
 
@@ -104,7 +109,7 @@ export default defineNuxtPlugin(() => {
     }
 
     refreshTimer = setTimeout(async () => {
-      if (!isRefreshing && getRefreshToken()) {
+      if (!isRefreshing) {
         isRefreshing = true
         try {
           const success = await refreshTokens()
@@ -122,7 +127,7 @@ export default defineNuxtPlugin(() => {
   }
 
   // Start the refresh timer if user is already logged in
-  if (getAccessToken() && getRefreshToken()) {
+  if (getAccessToken()) {
     scheduleTokenRefresh()
   }
 
@@ -130,7 +135,7 @@ export default defineNuxtPlugin(() => {
   // This handles login/logout events
   const { authUser } = useAuth()
   watch(authUser, (newUser) => {
-    if (newUser && getRefreshToken()) {
+    if (newUser) {
       // User logged in, start refresh timer
       scheduleTokenRefresh()
     } else {
@@ -154,7 +159,7 @@ export default defineNuxtPlugin(() => {
         if (token) {
           headers.Authorization = `Bearer ${token}`
         }
-        resolve($fetch(request, { ...options, headers }))
+        resolve($fetch(request, { ...options, headers, credentials: 'include' }))
       } else {
         reject(new Error('Token refresh failed'))
       }
@@ -188,33 +193,36 @@ export default defineNuxtPlugin(() => {
 
   /**
    * Create authenticated fetch wrapper
+   * All API requests include credentials for cookie handling
    */
   const authFetch = $fetch.create({
     /**
-     * Request interceptor - add auth headers
+     * Request interceptor - add auth headers and credentials
      */
     async onRequest({ options, request }: FetchContext) {
       const url = typeof request === 'string' ? request : request.toString()
 
-      // Only handle API requests that require auth
+      // Always include credentials for API requests (for HttpOnly cookie)
+      if (isApiRequest(url)) {
+        ;(options as Record<string, unknown>).credentials = 'include'
+      }
+
+      // Only add auth headers for endpoints that require auth
       if (!isApiRequest(url) || !requiresAuth(url)) {
         return
       }
 
       // Check if token needs proactive refresh (expiring within 60 seconds)
       if (isTokenExpiringSoon(60) && !isRefreshing) {
-        const refreshToken = getRefreshToken()
-        if (refreshToken) {
-          isRefreshing = true
-          try {
-            const success = await refreshTokens()
-            if (success) {
-              // Reschedule refresh timer with new expiration
-              scheduleTokenRefresh()
-            }
-          } finally {
-            isRefreshing = false
+        isRefreshing = true
+        try {
+          const success = await refreshTokens()
+          if (success) {
+            // Reschedule refresh timer with new expiration
+            scheduleTokenRefresh()
           }
+        } finally {
+          isRefreshing = false
         }
       }
 
@@ -254,13 +262,6 @@ export default defineNuxtPlugin(() => {
         })
       }
 
-      // Try to refresh token
-      const refreshToken = getRefreshToken()
-      if (!refreshToken) {
-        clearTokens()
-        return
-      }
-
       isRefreshing = true
 
       try {
@@ -279,7 +280,7 @@ export default defineNuxtPlugin(() => {
             addAuthHeader(options, newToken)
           }
 
-          // Return retried request
+          // Return retried request (credentials already set in onRequest)
           return $fetch(url, options as FetchOptions)
         } else {
           processQueue(false)

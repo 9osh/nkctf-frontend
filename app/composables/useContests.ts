@@ -3,7 +3,7 @@
  * Manages contest data fetched from the backend
  */
 
-export type ContestStatus = 'inactive' | 'active' | 'ending'
+export type ContestStatus = 'inactive' | 'active' | 'ended'
 
 /**
  * Scoring type for challenges
@@ -109,7 +109,7 @@ export interface Contest {
   participantCount: number
   isRegistered: boolean
   isTeamCompetition: boolean
-  /** Challenges list (only available when registered and contest is active/ending) */
+  /** Challenges list (only available when registered and contest is active/ended) */
   challenges?: CompetitionChallenge[] | null
 }
 
@@ -431,7 +431,7 @@ export function useContests() {
     const statusMap: Record<ContestStatus, string> = {
       inactive: '尚未开赛',
       active: '比赛中',
-      ending: '已结束'
+      ended: '已结束'
     }
     return statusMap[status]
   }
@@ -443,7 +443,7 @@ export function useContests() {
     const colorMap: Record<ContestStatus, 'warning' | 'success' | 'neutral'> = {
       inactive: 'warning',
       active: 'success',
-      ending: 'neutral'
+      ended: 'neutral'
     }
     return colorMap[status]
   }

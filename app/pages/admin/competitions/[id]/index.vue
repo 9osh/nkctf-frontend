@@ -300,29 +300,45 @@
           </div>
         </UCard>
 
-        <!-- Status Change (only for existing) -->
-        <UCard v-if="!isNew">
-          <template #header>
-            <h2 class="text-lg font-semibold">
-              竞赛状态
-            </h2>
-          </template>
+        <!-- Status Override (only for existing) -->
+        <div
+          v-if="!isNew && competitionId"
+          class="grid grid-cols-1 md:grid-cols-2 gap-6"
+        >
+          <!-- Basic Status -->
+          <UCard>
+            <template #header>
+              <h2 class="text-lg font-semibold">
+                竞赛状态
+              </h2>
+            </template>
 
-          <div class="flex items-center gap-4">
-            <UButton
-              v-for="status in statusOptions"
-              :key="status.value"
-              :color="currentStatus === status.value ? 'primary' : 'neutral'"
-              :variant="currentStatus === status.value ? 'solid' : 'outline'"
-              @click="handleStatusChange(status.value)"
-            >
-              {{ status.label }}
-            </UButton>
-          </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
-            当前状态: {{ getStatusLabel(currentStatus) }}
-          </p>
-        </UCard>
+            <div class="flex items-center gap-4">
+              <UButton
+                v-for="status in statusOptions"
+                :key="status.value"
+                :color="currentStatus === status.value ? 'primary' : 'neutral'"
+                :variant="currentStatus === status.value ? 'solid' : 'outline'"
+                @click="handleStatusChange(status.value)"
+              >
+                {{ status.label }}
+              </UButton>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+              当前状态: {{ getStatusLabel(currentStatus) }}
+            </p>
+          </UCard>
+
+          <!-- Status Override Control -->
+          <StatusOverrideControl
+            :competition-id="competitionId"
+            :current-status="currentStatus"
+            :status-override="statusOverride"
+            :start-time="formData.startTime"
+            :end-time="formData.endTime"
+            @status-changed="handleOverrideChange"
+          />
+        </div>
 
         <!-- Quick Links (only for existing) -->
         <UCard v-if="!isNew && competitionId">
@@ -392,6 +408,7 @@ const editorTheme = computed(() => colorMode.value === 'dark' ? 'dark' : 'light'
 const isLoadingDetail = ref(false)
 const isSaving = ref(false)
 const currentStatus = ref<CompetitionStatus>('inactive')
+const statusOverride = ref<string | null>(null)
 
 // Form data with string dates for datetime-local input
 const formData = reactive({
@@ -660,6 +677,13 @@ const handleStatusChange = async (status: CompetitionStatus) => {
   if (success) {
     currentStatus.value = status
   }
+}
+
+/**
+ * Handle status override change from StatusOverrideControl
+ */
+const handleOverrideChange = (status: CompetitionStatus) => {
+  currentStatus.value = status
 }
 
 // Initialize

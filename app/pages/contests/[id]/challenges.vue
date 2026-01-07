@@ -31,18 +31,12 @@
         class="flex items-center gap-4 text-sm"
       >
         <!-- Countdown / Status -->
+        <StatusCountdown
+          v-if="currentContest.status !== 'ending'"
+          :contest="currentContest"
+        />
         <span
-          v-if="currentContest.status === 'active'"
-          class="flex items-center gap-2 text-green-600 dark:text-green-400"
-        >
-          <UIcon
-            name="i-lucide-clock"
-            class="w-4 h-4"
-          />
-          比赛进行中
-        </span>
-        <span
-          v-else-if="currentContest.status === 'ending'"
+          v-else
           class="flex items-center gap-2 text-gray-500 dark:text-gray-400"
         >
           <UIcon
@@ -426,7 +420,7 @@
                     :model-value="currentChallengeDetail.content"
                     :theme="previewTheme"
                     language="zh-CN"
-                    class="bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    class="challenge-content"
                   />
                 </ClientOnly>
               </div>
@@ -618,12 +612,25 @@
 
             <!-- Flag Submission -->
             <div
-              v-if="currentContest?.status === 'active'"
+              v-if="currentContest && canSubmitFlag(currentContest)"
               class="mt-6"
             >
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 提交 Flag
               </label>
+              <!-- Ending status warning -->
+              <div
+                v-if="currentContest.status === 'ending'"
+                class="mb-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
+              >
+                <p class="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                  <UIcon
+                    name="i-lucide-alert-triangle"
+                    class="w-4 h-4"
+                  />
+                  比赛已结束，提交仅用于验证正确性，不影响排名
+                </p>
+              </div>
               <div class="flex gap-2">
                 <UInput
                   v-model="flagInput"
@@ -647,13 +654,13 @@
                   name="i-lucide-check-circle"
                   class="w-3 h-3"
                 />
-                您已解决此题目，仍可重新提交
+                您已解决此题目，仍可重新提交验证
               </p>
             </div>
 
-            <!-- Review Mode Notice -->
+            <!-- Inactive Status Notice -->
             <div
-              v-else-if="currentContest?.status === 'ending'"
+              v-else-if="currentContest?.status === 'inactive'"
               class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
             >
               <p class="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
@@ -661,7 +668,7 @@
                   name="i-lucide-info"
                   class="w-4 h-4"
                 />
-                比赛已结束，当前为回顾模式，无法提交 Flag
+                比赛尚未开始，暂时无法提交 Flag
               </p>
             </div>
           </div>
@@ -729,6 +736,10 @@ const {
 } = useContainers()
 const { isAuthenticated } = useAuth()
 const authFetch = useAuthFetch()
+const { subscribeToCompetition, canSubmitFlag, willScoreSubmission } = useCompetitionStatus()
+
+// Store unsubscribe function
+let unsubscribeStatus: (() => void) | null = null
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
@@ -783,13 +794,6 @@ watch(currentChallengeContainer, (newContainer, oldContainer) => {
     startCountdown(newContainer.containerId)
   }
 }, { immediate: true })
-
-// Cleanup countdown timers on unmount
-onUnmounted(() => {
-  if (currentChallengeContainer.value) {
-    stopCountdown(currentChallengeContainer.value.containerId)
-  }
-})
 
 // Load contest data
 const loadContest = async () => {
@@ -1130,14 +1134,33 @@ useSeoMeta({
   description: '参加 NKCTF 竞赛，挑战题目'
 })
 
-// Fetch contest on mount
+// Fetch contest on mount and subscribe to status updates
 onMounted(() => {
   loadContest()
+  // Subscribe to this competition's status updates
+  unsubscribeStatus = subscribeToCompetition(contestId.value)
+})
+
+// Cleanup subscriptions on unmount
+onUnmounted(() => {
+  if (currentChallengeContainer.value) {
+    stopCountdown(currentChallengeContainer.value.containerId)
+  }
+  if (unsubscribeStatus) {
+    unsubscribeStatus()
+    unsubscribeStatus = null
+  }
 })
 
 // Watch for route changes
 watch(() => route.params.id, () => {
+  // Cleanup previous subscription
+  if (unsubscribeStatus) {
+    unsubscribeStatus()
+  }
   loadContest()
+  // Subscribe to new competition
+  unsubscribeStatus = subscribeToCompetition(contestId.value)
 })
 </script>
 

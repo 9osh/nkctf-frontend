@@ -393,7 +393,7 @@
                     :model-value="selectedChallenge.content"
                     :theme="previewTheme"
                     language="zh-CN"
-                    class="bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    class="challenge-content"
                   />
                 </ClientOnly>
               </div>

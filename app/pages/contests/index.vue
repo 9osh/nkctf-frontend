@@ -179,6 +179,10 @@ useSeoMeta({
 })
 
 const { contests, isLoading, fetchContests, totalContests, getStatusText, getStatusColor } = useContests()
+const { subscribeToGlobalStatus } = useCompetitionStatus()
+
+// Store unsubscribe function
+let unsubscribeStatus: (() => void) | null = null
 
 // Filters
 const selectedStatus = ref<ContestStatus | undefined>(undefined)
@@ -237,9 +241,19 @@ const formatContestTime = (contest: { startTime: string, endTime: string }) => {
   return `${formatDate(start)} - ${formatDate(end)}`
 }
 
-// Fetch contests on mount
+// Fetch contests on mount and subscribe to status updates
 onMounted(() => {
   fetchContests()
+  // Subscribe to global status updates (all competitions)
+  unsubscribeStatus = subscribeToGlobalStatus()
+})
+
+// Cleanup subscription on unmount
+onUnmounted(() => {
+  if (unsubscribeStatus) {
+    unsubscribeStatus()
+    unsubscribeStatus = null
+  }
 })
 </script>
 

@@ -1,6 +1,8 @@
 /**
  * Authentication composable
- * Manages dual-token authentication (access token + refresh token)
+ * Manages dual-token authentication:
+ * - Access Token: stored in localStorage, sent via Authorization header
+ * - Refresh Token: stored in HttpOnly cookie by server, sent automatically by browser
  */
 
 // API Response wrapper
@@ -12,10 +14,10 @@ interface ApiResponse<T> {
 
 /**
  * Authentication response from login/register/refresh
+ * Note: refreshToken is no longer in response body, it's set as HttpOnly cookie by server
  */
 export interface AuthResponse {
   accessToken: string
-  refreshToken: string
   expiresIn: number
   userId: number
   username: string
@@ -33,14 +35,14 @@ export interface StoredAuthUser {
   role: 'USER' | 'ADMIN'
 }
 
-// Storage keys
+// Storage keys (Refresh token is no longer stored in localStorage)
 const STORAGE_KEYS = {
   ACCESS_TOKEN: 'accessToken',
-  REFRESH_TOKEN: 'refreshToken',
   EXPIRES_AT: 'tokenExpiresAt',
   USER: 'user',
-  // Legacy key for migration
-  LEGACY_TOKEN: 'token'
+  // Legacy keys for migration cleanup
+  LEGACY_TOKEN: 'token',
+  LEGACY_REFRESH_TOKEN: 'refreshToken'
 } as const
 
 export function useAuth() {
@@ -58,16 +60,6 @@ export function useAuth() {
   const getAccessToken = (): string | null => {
     if (import.meta.client) {
       return localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
-    }
-    return null
-  }
-
-  /**
-   * Get refresh token from localStorage
-   */
-  const getRefreshToken = (): string | null => {
-    if (import.meta.client) {
-      return localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)
     }
     return null
   }
@@ -118,13 +110,13 @@ export function useAuth() {
 
   /**
    * Store tokens and user info after login/register/refresh
+   * Note: Refresh token is stored as HttpOnly cookie by server, not in localStorage
    */
   const setTokens = (response: AuthResponse): void => {
     if (import.meta.client) {
       const expiresAt = Date.now() + (response.expiresIn * 1000)
 
       localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, response.accessToken)
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refreshToken)
       localStorage.setItem(STORAGE_KEYS.EXPIRES_AT, String(expiresAt))
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify({
         userId: response.userId,
@@ -145,33 +137,29 @@ export function useAuth() {
 
   /**
    * Clear all tokens and user info
+   * Note: HttpOnly cookie is cleared by server on logout
    */
   const clearTokens = (): void => {
     if (import.meta.client) {
       localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
-      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN)
       localStorage.removeItem(STORAGE_KEYS.EXPIRES_AT)
       localStorage.removeItem(STORAGE_KEYS.USER)
-      // Also clear legacy token if exists
+      // Clean up legacy keys if they exist
       localStorage.removeItem(STORAGE_KEYS.LEGACY_TOKEN)
+      localStorage.removeItem(STORAGE_KEYS.LEGACY_REFRESH_TOKEN)
     }
     authUser.value = null
   }
 
   /**
-   * Refresh tokens using the refresh token
+   * Refresh tokens using HttpOnly cookie
+   * Cookie is sent automatically by browser with credentials: 'include'
    * Implements concurrency control to prevent multiple simultaneous refreshes
    */
   const refreshTokens = async (): Promise<boolean> => {
     // Prevent multiple simultaneous refresh attempts
     if (isRefreshing.value && refreshPromise.value) {
       return refreshPromise.value
-    }
-
-    const currentRefreshToken = getRefreshToken()
-    if (!currentRefreshToken) {
-      clearTokens()
-      return false
     }
 
     isRefreshing.value = true
@@ -182,7 +170,8 @@ export function useAuth() {
           `${apiBase}/auth/refresh`,
           {
             method: 'POST',
-            body: { refreshToken: currentRefreshToken }
+            credentials: 'include' // Send HttpOnly cookie
+            // No body needed - refresh token is in cookie
           }
         )
 
@@ -229,7 +218,6 @@ export function useAuth() {
   const logout = async (allDevices = false): Promise<void> => {
     try {
       const accessToken = getAccessToken()
-      const refreshToken = getRefreshToken()
 
       if (accessToken) {
         const endpoint = allDevices
@@ -239,7 +227,7 @@ export function useAuth() {
         await $fetch(endpoint, {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}` },
-          body: allDevices ? undefined : { refreshToken }
+          credentials: 'include' // Send cookie to be cleared by server
         }).catch(() => {
           // Ignore errors, proceed with local logout
         })
@@ -252,21 +240,26 @@ export function useAuth() {
 
   /**
    * Initialize auth state from localStorage
-   * Also handles migration from old single-token format
+   * Also handles migration from old formats (forces re-login)
    */
   const initAuth = (): void => {
     if (import.meta.client) {
-      // Check for legacy token and migrate (force re-login)
+      // Check for legacy tokens and clean up (force re-login)
       const legacyToken = localStorage.getItem(STORAGE_KEYS.LEGACY_TOKEN)
-      if (legacyToken && !localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)) {
-        // Old token exists but new format doesn't - clear and force re-login
+      const legacyRefreshToken = localStorage.getItem(STORAGE_KEYS.LEGACY_REFRESH_TOKEN)
+
+      if (legacyToken || legacyRefreshToken) {
+        // Old format detected - clear everything and force re-login
         localStorage.removeItem(STORAGE_KEYS.LEGACY_TOKEN)
+        localStorage.removeItem(STORAGE_KEYS.LEGACY_REFRESH_TOKEN)
+        localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
+        localStorage.removeItem(STORAGE_KEYS.EXPIRES_AT)
         localStorage.removeItem(STORAGE_KEYS.USER)
         console.info('[Auth] Legacy token format detected, please log in again')
         return
       }
 
-      // Load new format
+      // Load current format
       const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
       const userStr = localStorage.getItem(STORAGE_KEYS.USER)
 
@@ -288,7 +281,6 @@ export function useAuth() {
 
     // Token management
     getAccessToken,
-    getRefreshToken,
     getTokenExpiresAt,
     setTokens,
     clearTokens,

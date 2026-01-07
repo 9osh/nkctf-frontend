@@ -222,10 +222,10 @@ interface ApiResponse<T = unknown> {
 
 /**
  * Login response data
+ * Note: refreshToken is no longer in response body, it's set as HttpOnly cookie
  */
 interface LoginData {
   accessToken: string
-  refreshToken: string
   expiresIn: number
   userId: number
   username: string
@@ -329,6 +329,7 @@ const onSubmit = async (event: FormSubmitEvent<FormState>) => {
   try {
     const response = await $fetch<ApiResponse<LoginData>>('/api/auth/login', {
       method: 'POST',
+      credentials: 'include', // Receive HttpOnly cookie from server
       body: {
         username: event.data.username,
         password: event.data.password

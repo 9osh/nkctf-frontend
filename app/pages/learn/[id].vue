@@ -463,39 +463,3 @@ onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
 })
 </script>
-
-<style>
-/* Override md-editor-v3 preview styles to match theme */
-.article-content {
-  background-color: transparent !important;
-}
-
-.article-content .md-editor-preview-wrapper {
-  background-color: transparent !important;
-  padding: 0 !important;
-}
-
-.article-content .md-editor-preview {
-  background-color: transparent !important;
-}
-
-/* Dark mode overrides */
-.dark .article-content,
-.dark .article-content .md-editor-preview-wrapper,
-.dark .article-content .md-editor-preview {
-  background-color: transparent !important;
-}
-
-/* Ensure code blocks have proper background in dark mode */
-.dark .article-content pre {
-  background-color: rgb(31 41 55) !important;
-}
-
-.article-content pre {
-  background-color: rgb(243 244 246) !important;
-}
-
-.dark .article-content pre code {
-  background-color: transparent !important;
-}
-</style>

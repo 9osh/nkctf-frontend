@@ -338,10 +338,10 @@ interface CaptchaData {
 
 /**
  * Register response data
+ * Note: refreshToken is no longer in response body, it's set as HttpOnly cookie
  */
 interface RegisterData {
   accessToken: string
-  refreshToken: string
   expiresIn: number
   userId: number
   username: string
@@ -538,6 +538,7 @@ const onSubmit = async (event: FormSubmitEvent<FormState>) => {
   try {
     const response = await $fetch<ApiResponse<RegisterData>>('/api/auth/register', {
       method: 'POST',
+      credentials: 'include', // Receive HttpOnly cookie from server
       body: {
         username: event.data.username,
         password: event.data.password,

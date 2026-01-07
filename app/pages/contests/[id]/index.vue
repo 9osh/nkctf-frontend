@@ -176,6 +176,14 @@
             </div>
           </div>
 
+          <!-- Countdown Timer (for inactive or active status) -->
+          <div
+            v-if="currentContest && currentContest.status !== 'ended'"
+            class="mb-6 p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+          >
+            <StatusCountdown :contest="currentContest" />
+          </div>
+
           <!-- Action Buttons -->
           <div class="flex items-center gap-3">
             <!-- Register Button (only for inactive status) -->
@@ -319,12 +327,16 @@ const router = useRouter()
 const toast = useToast()
 const { currentContest, contests, isLoading, error, fetchContest, fetchContests, registerContest, getStatusText, getStatusColor } = useContests()
 const { hasTeam, isLoggedIn } = useUser()
+const { subscribeToCompetition } = useCompetitionStatus()
 
 // Get contest ID from route
 const contestId = computed(() => Number(route.params.id))
 
 // Registration state
 const isRegistering = ref(false)
+
+// Store unsubscribe function
+let unsubscribeStatus: (() => void) | null = null
 
 // Load contest data
 const loadContest = async () => {
@@ -392,13 +404,29 @@ useSeoMeta({
   description: () => currentContest.value ? currentContest.value.description : ''
 })
 
-// Fetch contest on mount
+// Fetch contest on mount and subscribe to status updates
 onMounted(() => {
   loadContest()
+  // Subscribe to this competition's status updates
+  unsubscribeStatus = subscribeToCompetition(contestId.value)
+})
+
+// Cleanup subscription on unmount
+onUnmounted(() => {
+  if (unsubscribeStatus) {
+    unsubscribeStatus()
+    unsubscribeStatus = null
+  }
 })
 
 // Watch for route changes
 watch(() => route.params.id, () => {
+  // Cleanup previous subscription
+  if (unsubscribeStatus) {
+    unsubscribeStatus()
+  }
   loadContest()
+  // Subscribe to new competition
+  unsubscribeStatus = subscribeToCompetition(contestId.value)
 })
 </script>

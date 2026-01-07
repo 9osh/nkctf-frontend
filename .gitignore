@@ -27,3 +27,6 @@ logs
 *.md
 !README.zh-CN.md
 !README.md
+
+# test dir
+tests/*
