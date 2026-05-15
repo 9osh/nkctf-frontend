@@ -13,13 +13,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
-  const { isLoggedIn } = useUser()
+  const { isLoggedIn, ensureUserSession } = useUser()
 
-  // Initialize user state from localStorage if needed
-  const { initUser } = useUser()
-  initUser()
+  const sessionOk = await ensureUserSession()
 
-  if (!isLoggedIn.value) {
+  if (!sessionOk && !isLoggedIn.value) {
     // Store the intended destination for redirect after login
     const redirectPath = to.fullPath
     return navigateTo(`/login?redirect=${encodeURIComponent(redirectPath)}`)

@@ -13,14 +13,12 @@ export default defineNuxtRouteMiddleware(async () => {
     return
   }
 
-  const { isLoggedIn, storedUser } = useUser()
+  const { isLoggedIn, storedUser, ensureUserSession } = useUser()
 
-  // Initialize user state from localStorage if needed
-  const { initUser } = useUser()
-  initUser()
+  const sessionOk = await ensureUserSession()
 
   // Check authentication
-  if (!isLoggedIn.value) {
+  if (!sessionOk && !isLoggedIn.value) {
     return navigateTo('/login')
   }
 

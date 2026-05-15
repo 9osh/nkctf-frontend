@@ -30,3 +30,7 @@ logs
 
 # test dir
 tests/*
+
+# cursor indexing ignore
+.cursorindexingignore
+.specstory/*

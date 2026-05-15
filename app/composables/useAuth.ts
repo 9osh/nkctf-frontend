@@ -45,6 +45,24 @@ const STORAGE_KEYS = {
   LEGACY_REFRESH_TOKEN: 'refreshToken'
 } as const
 
+/** True when running in the browser (not SSR). */
+function isClient(): boolean {
+  return typeof window !== 'undefined'
+}
+
+/**
+ * Auth endpoints must hit same-origin /api in the browser so the HttpOnly refresh
+ * cookie (set on login via proxied /api/auth/login) is sent with credentials.
+ */
+function resolveAuthApiUrl(action: string, apiBase: string): string {
+  const path = action.replace(/^\//, '')
+  if (isClient()) {
+    return `/api/auth/${path}`
+  }
+  const base = apiBase.replace(/\/$/, '')
+  return `${base}/auth/${path}`
+}
+
 export function useAuth() {
   const config = useRuntimeConfig()
   const apiBase = config.public.apiBase as string || '/api'
@@ -58,7 +76,7 @@ export function useAuth() {
    * Get access token from localStorage
    */
   const getAccessToken = (): string | null => {
-    if (import.meta.client) {
+    if (isClient()) {
       return localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
     }
     return null
@@ -68,7 +86,7 @@ export function useAuth() {
    * Get token expiration timestamp
    */
   const getTokenExpiresAt = (): number | null => {
-    if (import.meta.client) {
+    if (isClient()) {
       const expiresAt = localStorage.getItem(STORAGE_KEYS.EXPIRES_AT)
       return expiresAt ? parseInt(expiresAt, 10) : null
     }
@@ -94,6 +112,55 @@ export function useAuth() {
   }
 
   /**
+   * Whether local storage still represents a logged-in session (access token may be expired).
+   */
+  const hasStoredSession = (): boolean => {
+    if (!isClient()) {
+      return false
+    }
+    return !!(
+      localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)
+      && localStorage.getItem(STORAGE_KEYS.USER)
+    )
+  }
+
+  /**
+   * Restore a valid access token when refresh cookie is still valid.
+   */
+  const ensureSession = async (): Promise<boolean> => {
+    if (!isClient()) {
+      return false
+    }
+
+    if (isAuthenticated.value) {
+      return true
+    }
+
+    if (!hasStoredSession()) {
+      return false
+    }
+
+    // Reload authUser from localStorage if missing
+    if (!authUser.value) {
+      const userStr = localStorage.getItem(STORAGE_KEYS.USER)
+      if (userStr) {
+        try {
+          authUser.value = JSON.parse(userStr) as StoredAuthUser
+        } catch {
+          clearTokens()
+          return false
+        }
+      }
+    }
+
+    if (!isTokenExpired()) {
+      return !!authUser.value && !!getAccessToken()
+    }
+
+    return refreshTokens()
+  }
+
+  /**
    * Check if user is authenticated (has valid non-expired token)
    * Uses authUser for reactivity, localStorage for source of truth
    */
@@ -113,7 +180,7 @@ export function useAuth() {
    * Note: Refresh token is stored as HttpOnly cookie by server, not in localStorage
    */
   const setTokens = (response: AuthResponse): void => {
-    if (import.meta.client) {
+    if (isClient()) {
       const expiresAt = Date.now() + (response.expiresIn * 1000)
 
       localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, response.accessToken)
@@ -140,7 +207,7 @@ export function useAuth() {
    * Note: HttpOnly cookie is cleared by server on logout
    */
   const clearTokens = (): void => {
-    if (import.meta.client) {
+    if (isClient()) {
       localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN)
       localStorage.removeItem(STORAGE_KEYS.EXPIRES_AT)
       localStorage.removeItem(STORAGE_KEYS.USER)
@@ -167,7 +234,7 @@ export function useAuth() {
     refreshPromise.value = (async () => {
       try {
         const response = await $fetch<ApiResponse<AuthResponse>>(
-          `${apiBase}/auth/refresh`,
+          resolveAuthApiUrl('refresh', apiBase),
           {
             method: 'POST',
             credentials: 'include' // Send HttpOnly cookie
@@ -221,8 +288,8 @@ export function useAuth() {
 
       if (accessToken) {
         const endpoint = allDevices
-          ? `${apiBase}/auth/logout-all`
-          : `${apiBase}/auth/logout`
+          ? resolveAuthApiUrl('logout-all', apiBase)
+          : resolveAuthApiUrl('logout', apiBase)
 
         await $fetch(endpoint, {
           method: 'POST',
@@ -243,7 +310,7 @@ export function useAuth() {
    * Also handles migration from old formats (forces re-login)
    */
   const initAuth = (): void => {
-    if (import.meta.client) {
+    if (isClient()) {
       // Check for legacy tokens and clean up (force re-login)
       const legacyToken = localStorage.getItem(STORAGE_KEYS.LEGACY_TOKEN)
       const legacyRefreshToken = localStorage.getItem(STORAGE_KEYS.LEGACY_REFRESH_TOKEN)
@@ -296,6 +363,8 @@ export function useAuth() {
     // Auth actions
     logout,
     initAuth,
+    hasStoredSession,
+    ensureSession,
 
     // Constants
     STORAGE_KEYS
@@ -310,7 +379,7 @@ export function useAuth() {
  * The plugin handles auth headers and token refresh automatically on client
  */
 export function useAuthFetch(): typeof $fetch {
-  if (import.meta.server) {
+  if (!isClient()) {
     // During SSR, use regular $fetch (no auth)
     return $fetch
   }

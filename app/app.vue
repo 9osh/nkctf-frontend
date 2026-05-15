@@ -1,9 +1,9 @@
 <script setup lang="ts">
-const { storedUser, isLoggedIn, initUser, logout } = useUser()
+const { storedUser, isLoggedIn, ensureUserSession, logout } = useUser()
 
-// Initialize user state from localStorage on mount
+// Restore session and refresh access token if expired (refresh cookie still valid)
 onMounted(() => {
-  initUser()
+  void ensureUserSession()
 })
 
 useHead({

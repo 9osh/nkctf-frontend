@@ -71,7 +71,7 @@ export interface StoredUser {
 }
 
 export function useUser() {
-  const { isAuthenticated, authUser, setTokens, logout: authLogout, initAuth } = useAuth()
+  const { isAuthenticated, authUser, setTokens, logout: authLogout, initAuth, ensureSession } = useAuth()
   const authFetch = useAuthFetch()
 
   const user = useState<UserProfile | null>('user', () => null)
@@ -94,6 +94,18 @@ export function useUser() {
     if (authUser.value) {
       storedUser.value = authUser.value
     }
+  }
+
+  /**
+   * Restore session from localStorage and refresh access token if expired.
+   */
+  const ensureUserSession = async (): Promise<boolean> => {
+    initUser()
+    const ok = await ensureSession()
+    if (ok && authUser.value) {
+      storedUser.value = authUser.value
+    }
+    return ok
   }
 
   /**
@@ -544,6 +556,7 @@ export function useUser() {
     error,
     isLoggedIn,
     initUser,
+    ensureUserSession,
     setStoredUser,
     fetchUser,
     fetchUserById,

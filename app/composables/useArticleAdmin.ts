@@ -3,6 +3,8 @@
  * Manages admin operations for articles
  */
 
+import { useRuntimeConfig, useState } from 'nuxt/app'
+import { useAuthFetch } from './useAuth'
 import type { Article, ArticleListResponse, ArticleStatus, Tag } from './useLearn'
 
 // API Response wrapper

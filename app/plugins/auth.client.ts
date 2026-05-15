@@ -97,9 +97,9 @@ export default defineNuxtPlugin(() => {
     const refreshAt = expiresAt - REFRESH_BUFFER_MS
     let delay = refreshAt - now
 
-    // If token is already expiring soon, refresh immediately (but with minimum delay)
+    // Token expired or within buffer — refresh as soon as possible
     if (delay < 0) {
-      delay = MIN_REFRESH_INTERVAL_MS
+      delay = 0
     }
 
     // Safety cap: don't set timers longer than 24 hours
@@ -126,10 +126,22 @@ export default defineNuxtPlugin(() => {
     }, delay)
   }
 
-  // Start the refresh timer if user is already logged in
-  if (getAccessToken()) {
+  // Start refresh timer, or refresh immediately if access token already expired
+  const bootstrapSessionRefresh = async () => {
+    if (!getAccessToken()) {
+      return
+    }
+    if (isTokenExpiringSoon(120)) {
+      const success = await refreshTokens()
+      if (success) {
+        scheduleTokenRefresh()
+      }
+      return
+    }
     scheduleTokenRefresh()
   }
+
+  void bootstrapSessionRefresh()
 
   // Watch for auth state changes to manage timer
   // This handles login/logout events
@@ -204,7 +216,7 @@ export default defineNuxtPlugin(() => {
 
       // Always include credentials for API requests (for HttpOnly cookie)
       if (isApiRequest(url)) {
-        ;(options as Record<string, unknown>).credentials = 'include'
+        options.credentials = 'include'
       }
 
       // Only add auth headers for endpoints that require auth
