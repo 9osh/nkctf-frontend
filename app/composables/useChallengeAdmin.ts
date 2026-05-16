@@ -49,6 +49,8 @@ export interface AdminChallenge {
   author?: string
   isDynamic: boolean
   dockerImage?: string
+  /** 容器内服务端口；null 表示使用分类默认（WEB 80，其他 9999） */
+  dockerPort?: number | null
   attachmentUrl?: string
   enabled: boolean
   solveCount: number
@@ -120,8 +122,48 @@ export interface ChallengeFormData {
   isDynamic: boolean
   /** Docker image (required if isDynamic=true) */
   dockerImage?: string
+  /**
+   * 容器内服务端口（1–65535）。
+   * 提交时若未填写：WEB 为 80，其他分类为 9999。
+   */
+  dockerPort?: number
   /** Whether visible in practice mode */
   enabled?: boolean
+}
+
+/** WEB 类题目留空时的默认容器端口 */
+export const WEB_DOCKER_PORT_DEFAULT = 80
+
+/** 非 WEB 分类留空时的默认容器端口 */
+export const NON_WEB_DOCKER_PORT_DEFAULT = 9999
+
+/**
+ * 按分类返回留空时的默认端口（与后端 resolve 语义一致）
+ */
+export function getDockerPortEmptyDefault(category: ChallengeCategory): number {
+  return category === 'WEB' ? WEB_DOCKER_PORT_DEFAULT : NON_WEB_DOCKER_PORT_DEFAULT
+}
+
+/** 按分类返回建议填写的端口（方案 C：与留空默认相同，便于一键填入） */
+export function getDockerPortSuggestion(category: ChallengeCategory): number {
+  return getDockerPortEmptyDefault(category)
+}
+
+/**
+ * 将表单端口解析为提交给 API 的值
+ */
+export function resolveDockerPortForApi(
+  category: ChallengeCategory,
+  port: number | null | undefined
+): number {
+  if (port != null && !Number.isNaN(port) && port >= 1 && port <= 65535) {
+    return Math.trunc(port)
+  }
+  return getDockerPortEmptyDefault(category)
+}
+
+export function isValidDockerPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65535
 }
 
 // Hint form data

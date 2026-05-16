@@ -342,17 +342,51 @@
             </div>
 
             <!-- Dynamic Container -->
-            <div v-else>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Docker 镜像 <span class="text-red-500">*</span>
-              </label>
-              <UInput
-                v-model="formData.dockerImage"
-                placeholder="ctf/challenge:latest"
-              />
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                动态容器题目会为每个用户生成独立的 Flag
-              </p>
+            <div
+              v-else
+              class="space-y-4"
+            >
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Docker 镜像 <span class="text-red-500">*</span>
+                </label>
+                <UInput
+                  v-model="formData.dockerImage"
+                  placeholder="ctf/challenge:latest"
+                />
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  动态容器题目会为每个用户生成独立的 Flag
+                </p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  容器端口
+                </label>
+                <div class="flex flex-wrap items-center gap-2">
+                  <UInput
+                    v-model.number="formData.dockerPort"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    :placeholder="`留空保存为 ${emptyDefaultDockerPort}`"
+                    class="w-40"
+                  />
+                  <UButton
+                    size="sm"
+                    color="neutral"
+                    variant="outline"
+                    icon="i-lucide-sparkles"
+                    @click="applySuggestedDockerPort"
+                  >
+                    使用建议 {{ suggestedDockerPort }}
+                  </UButton>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  镜像内服务监听端口（与 Dockerfile EXPOSE 一致）。
+                  WEB 留空保存为 {{ WEB_DOCKER_PORT_DEFAULT }}，其他分类留空保存为 {{ NON_WEB_DOCKER_PORT_DEFAULT }}。
+                </p>
+              </div>
             </div>
           </div>
         </UCard>
@@ -489,13 +523,19 @@
 <script setup lang="ts">
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
-import type {
-  AdminChallenge,
-  AdminHint,
-  ChallengeCategory,
-  ChallengeDifficulty,
-  ChallengeFormData,
-  ScoringType
+import {
+  getDockerPortEmptyDefault,
+  getDockerPortSuggestion,
+  isValidDockerPort,
+  NON_WEB_DOCKER_PORT_DEFAULT,
+  resolveDockerPortForApi,
+  WEB_DOCKER_PORT_DEFAULT,
+  type AdminChallenge,
+  type AdminHint,
+  type ChallengeCategory,
+  type ChallengeDifficulty,
+  type ChallengeFormData,
+  type ScoringType
 } from '~/composables/useChallengeAdmin'
 
 // Use admin middleware for route protection
@@ -554,8 +594,16 @@ const formData = reactive<ChallengeFormData & { enabled: boolean }>({
   author: '',
   isDynamic: false,
   dockerImage: '',
+  dockerPort: undefined as number | undefined,
   enabled: false
 })
+
+const emptyDefaultDockerPort = computed(() => getDockerPortEmptyDefault(formData.category))
+const suggestedDockerPort = computed(() => getDockerPortSuggestion(formData.category))
+
+const applySuggestedDockerPort = () => {
+  formData.dockerPort = suggestedDockerPort.value
+}
 
 // Toast for notifications
 const toast = useToast()
@@ -621,6 +669,7 @@ const loadChallenge = async () => {
     formData.author = challenge.author || ''
     formData.isDynamic = challenge.isDynamic
     formData.dockerImage = challenge.dockerImage || ''
+    formData.dockerPort = challenge.dockerPort ?? undefined
     formData.enabled = challenge.enabled
     hints.value = challenge.hints || []
     currentAttachment.value = challenge.attachmentUrl || null
@@ -651,6 +700,15 @@ const handleSave = async () => {
   }
   if (formData.isDynamic && !formData.dockerImage?.trim()) {
     toast.add({ title: '请输入 Docker 镜像', color: 'error' })
+    return
+  }
+  if (
+    formData.isDynamic
+    && formData.dockerPort != null
+    && !Number.isNaN(formData.dockerPort)
+    && !isValidDockerPort(formData.dockerPort)
+  ) {
+    toast.add({ title: '容器端口须在 1–65535 之间', color: 'error' })
     return
   }
 
@@ -694,6 +752,7 @@ const handleSave = async () => {
 
   if (formData.isDynamic) {
     data.dockerImage = formData.dockerImage
+    data.dockerPort = resolveDockerPortForApi(formData.category, formData.dockerPort)
   } else {
     data.flag = formData.flag
   }
